@@ -1,0 +1,94 @@
+﻿{
+   "CodeGenerationMode": 4,
+   "ContextClassName": "DataBaseContext",
+   "ContextNamespace": null,
+   "FilterSchemas": false,
+   "IncludeConnectionString": false,
+   "MinimumProductVersion": "2.6.1080",
+   "ModelNamespace": null,
+   "OutputContextPath": null,
+   "OutputPath": "Models",
+   "PreserveCasingWithRegex": true,
+   "ProjectRootNamespace": "DataLayer",
+   "Schemas": null,
+   "SelectedHandlebarsLanguage": 2,
+   "SelectedToBeGenerated": 0,
+   "T4TemplatePath": null,
+   "Tables": [
+      {
+         "Name": "[dbo].[adminsSet]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[dbo].[categoriesSet]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[dbo].[imagesSet]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[dbo].[order_historySet]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[dbo].[order_productsSet]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[dbo].[ordersSet]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[dbo].[product_categoriesSet]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[dbo].[productsSet]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[dbo].[status_ordersSet]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[dbo].[usersSet]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[dbo].[warehouse_productsSet]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[dbo].[warehousesSet]",
+         "ObjectType": 0
+      }
+   ],
+   "UiHint": null,
+   "UncountableWords": null,
+   "UseAsyncStoredProcedureCalls": true,
+   "UseBoolPropertiesWithoutDefaultSql": false,
+   "UseDatabaseNames": true,
+   "UseDatabaseNamesForRoutines": true,
+   "UseDateOnlyTimeOnly": true,
+   "UseDbContextSplitting": false,
+   "UseDecimalDataAnnotationForSprocResult": true,
+   "UseFluentApiOnly": true,
+   "UseHandleBars": false,
+   "UseHierarchyId": false,
+   "UseInflector": true,
+   "UseInternalAccessModifiersForSprocsAndFunctions": false,
+   "UseLegacyPluralizer": false,
+   "UseManyToManyEntity": false,
+   "UseNoDefaultConstructor": false,
+   "UseNoNavigations": false,
+   "UseNoObjectFilter": false,
+   "UseNodaTime": false,
+   "UseNullableReferences": false,
+   "UsePrefixNavigationNaming": false,
+   "UseSchemaFolders": false,
+   "UseSchemaNamespaces": false,
+   "UseSpatial": false,
+   "UseT4": false,
+   "UseT4Split": false
+}
