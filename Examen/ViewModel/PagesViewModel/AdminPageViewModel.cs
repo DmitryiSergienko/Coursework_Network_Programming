@@ -6,7 +6,6 @@ using System.Windows.Input;
 using System.Windows.Media.Imaging;
 using ViewModel.Core;
 using ViewModel.ModalWindowsViewModel;
-using ViewModel.Services.Classes;
 using ViewModel.Services.Interfaces;
 
 namespace ViewModel.PagesViewModel;

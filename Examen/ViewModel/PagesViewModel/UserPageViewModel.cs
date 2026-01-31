@@ -1,5 +1,4 @@
-﻿using DataLayer.Procedures;
-using DataLayer.Services;
+﻿using DataLayer.Services;
 using System.Data;
 using System.IO;
 using System.Windows;

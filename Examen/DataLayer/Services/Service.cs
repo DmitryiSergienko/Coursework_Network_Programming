@@ -4,7 +4,6 @@ using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Model;
 using System.Data;
-using System.Data.Entity;
 
 namespace DataLayer.Services
 {
@@ -50,7 +49,7 @@ namespace DataLayer.Services
                         phone_number: human.PhoneNumber,
                         userID: humanIdParam
                 );
-                else
+                else if (human is AdminsModel)
                 {
                     await _context_Procedures.Procedures.add_admin_return_idAsync(
                         login: human.Login,
@@ -68,10 +67,13 @@ namespace DataLayer.Services
             {
                 throw MapToUserFriendlyError(ex);
             }
-
             if (humanIdParam.Value <= 0)
             {
                 throw new Exception("Не удалось получить ID.");
+            }
+            if(humanIdParam.Value == null)
+            {
+                return 0;
             }
             return humanIdParam.Value.Value;
         }
@@ -107,7 +109,7 @@ namespace DataLayer.Services
             }
             try
             {
-                IEnumerable<dynamic> result = null;
+                IEnumerable<dynamic>? result = null;
 
                 if (human is AdminsModel)
                 {
@@ -116,9 +118,14 @@ namespace DataLayer.Services
                 else if (human is UsersModel)
                 {
                     result = await _context_Procedures.Procedures.stp_search_user_for_authAsync(human.Login, human.Password);
-                }                    
-                await GetHumanInfoAsync(human);
-                return result.Any();
+                }
+
+                if (result?.Any() == true)
+                {
+                    await GetHumanInfoAsync(human);
+                    return true;
+                }
+                return false;
             }
             catch (SqlException ex)
             {
@@ -132,7 +139,7 @@ namespace DataLayer.Services
                 return false;
             }
         }
-        public async Task<HumansModel> GetHumanInfoById(int Id, string humanType)
+        public async Task<HumansModel?> GetHumanInfoById(int Id, string humanType)
         {
             _deleteHuman = null;
 
@@ -155,7 +162,6 @@ namespace DataLayer.Services
                     mail: dbUser.mail,
                     phone_number: dbUser.phone_number
                 );
-                return _deleteHuman;
             }
             else if (humanType == "admin")
             {
@@ -176,9 +182,8 @@ namespace DataLayer.Services
                     mail: dbAdmin.mail,
                     phone_number: dbAdmin.phone_number
                 );
-                return _deleteHuman;
             }
-            return null;
+            return _deleteHuman;
         }
         private async Task GetHumanInfoAsync(HumansModel human)
         {
