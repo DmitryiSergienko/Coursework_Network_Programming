@@ -24,44 +24,71 @@ namespace Server.Controllers
         [HttpPost("login")]
         public async Task<IActionResult> Login([FromBody] LoginRequest request)
         {
-            // 1. Создаём модели для проверки
-            var user = new UsersModel(request.Login, request.Password);
-            var admin = new AdminsModel(request.Login, request.Password);
+            Console.WriteLine("✅ Запрос получен. Порт: " + request.Login);
+            Console.WriteLine($"[CONTROLLER] Получен запрос: login={request.Login}, password={request.Password}");
 
-            // 2. Проверяем авторизацию
-            if (await _service.OnLoginAsync(user))
+            if (string.IsNullOrWhiteSpace(request.Login) || string.IsNullOrWhiteSpace(request.Password))
             {
-                if (_service.CurrentHuman == null)
-                    return Unauthorized(new { error = "Ошибка авторизации" });
-
-                // 3. Формируем БЕЗОПАСНЫЙ ответ без пароля
-                var response = new LoginResponse
-                {
-                    Id = _service.CurrentHuman.Id,
-                    Login = _service.CurrentHuman.Login,
-                    Name = _service.CurrentHuman.Name,
-                    Surname = _service.CurrentHuman.Surname,
-                    Type = "user"
-                };
-                return Ok(response);
+                return BadRequest(new { error = "Логин и пароль обязательны" });
             }
-            else if (await _service.OnLoginAsync(admin))
+            try
             {
-                if (_service.CurrentHuman == null)
-                    return Unauthorized(new { error = "Ошибка авторизации" });
+                // 1. Создаём модели для проверки
+                var user = new UsersModel(request.Login, request.Password);
+                var admin = new AdminsModel(request.Login, request.Password);
 
-                var response = new LoginResponse
+                // 2. Проверяем авторизацию
+                Console.WriteLine("[CONTROLLER] Пытаюсь войти");
+                Console.WriteLine($"[CONTROLLER] CurrentHuman: {_service.CurrentHuman?.Login ?? "NULL"}");
+                if (await _service.OnLoginAsync(user))
                 {
-                    Id = _service.CurrentHuman.Id,
-                    Login = _service.CurrentHuman.Login,
-                    Name = _service.CurrentHuman.Name,
-                    Surname = _service.CurrentHuman.Surname,
-                    Type = "admin"
-                };
-                return Ok(response);
-            }
+                    Console.WriteLine("[CONTROLLER] Успешный вход как User");
+                    if (_service.CurrentHuman == null)
+                        return Unauthorized(new { error = "Ошибка авторизации" });
 
-            return Unauthorized(new { error = "Неверный логин или пароль" });
+                    // 3. Формируем БЕЗОПАСНЫЙ ответ без пароля
+                    var response = new LoginResponse
+                    {
+                        Id = _service.CurrentHuman.Id,
+                        Login = _service.CurrentHuman.Login,
+                        Name = _service.CurrentHuman.Name,
+                        Surname = _service.CurrentHuman.Surname,
+                        Type = "user"
+                    };
+                    return Ok(response);
+                }      
+                else if (await _service.OnLoginAsync(admin))
+                {
+                    Console.WriteLine("[CONTROLLER] Успешный вход как Admin");
+                    if (_service.CurrentHuman == null)
+                        return Unauthorized(new { error = "Ошибка авторизации" });
+
+                    var response = new LoginResponse
+                    {
+                        Id = _service.CurrentHuman.Id,
+                        Login = _service.CurrentHuman.Login,
+                        Name = _service.CurrentHuman.Name,
+                        Surname = _service.CurrentHuman.Surname,
+                        Type = "admin"
+                    };
+                    return Ok(response);
+                }
+
+                Console.WriteLine("[DEBUG] Авторизация провалена для: " + request.Login);
+                return Unauthorized(new { error = "Неверный логин или пароль" });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { error = ex.Message });
+            }
+        }
+
+        // POST api/auth/logout
+        [HttpPost("logout")]
+        public IActionResult Logout()
+        {
+            _service.LogOut();
+            return Ok(new { message = "Выход выполнен" });
         }
     }
 

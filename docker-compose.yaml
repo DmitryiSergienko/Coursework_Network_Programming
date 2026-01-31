@@ -1,0 +1,48 @@
+services:
+  mssql:
+    image: mcr.microsoft.com/mssql/server:2019-latest
+    container_name: mssql-server-2019
+    environment:
+      - ACCEPT_EULA=Y
+      - SA_PASSWORD=YourStrong!Passw0rd
+      - MSSQL_PID=Developer
+    ports:
+      - "1433:1433"
+    volumes:
+      - mssql-data:/var/opt/mssql
+      - ./Examen/SQL:/docker-entrypoint-initdb.d
+    networks:
+      - examen-network
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P YourStrong!Passw0rd -Q 'SELECT 1' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  examen-server:
+    build:
+      context: .
+      dockerfile: ./Examen/Server/Dockerfile
+    container_name: examen-server
+    ports:
+      - "5000:8080"  # Внешний порт:Внутренний порт
+      - "5001:8081"  # Внешний порт:Внутренний порт
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Docker
+      - ASPNETCORE_URLS=http://+:8080
+    networks:
+      - examen-network
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      mssql:
+        condition: service_healthy
+
+volumes:
+  mssql-data:
+    driver: local
+
+networks:
+  examen-network:
+    driver: bridge

@@ -5,7 +5,8 @@ FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS base
 USER $APP_UID
 WORKDIR /app
 EXPOSE 8080
-EXPOSE 8081
+ENV ASPNETCORE_URLS=http://+:8080
+ENV ASPNETCORE_ENVIRONMENT=Docker
 
 
 # Этот этап используется для сборки проекта службы
@@ -27,4 +28,5 @@ RUN dotnet publish "./Server.csproj" -c $BUILD_CONFIGURATION -o /app/publish /p:
 FROM base AS final
 WORKDIR /app
 COPY --from=publish /app/publish .
+COPY ["Examen/Server/appsettings.Docker.json", "/app/appsettings.Docker.json"]
 ENTRYPOINT ["dotnet", "Server.dll"]

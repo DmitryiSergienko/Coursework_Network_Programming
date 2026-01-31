@@ -34,9 +34,9 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAll", policy =>
     {
-        policy.AllowAnyOrigin()
-              .AllowAnyMethod()
-              .AllowAnyHeader();
+        policy.AllowAnyOrigin()  // Разрешает запросы с любого домена (для разработки)
+              .AllowAnyMethod()  // Разрешает любые методы (GET, POST, PUT и т.д.)
+              .AllowAnyHeader(); // Разрешает любые заголовки
     });
 });
 
@@ -48,8 +48,8 @@ app.UseSwaggerUI(c =>
     c.SwaggerEndpoint("/swagger/v1/swagger.json", "Examen API V1");
 });
 
-app.UseCors("AllowAll");
 app.UseHttpsRedirection();
+app.UseCors("AllowAll");
 app.MapControllers();
 
 app.Run();

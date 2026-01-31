@@ -120,6 +120,8 @@ namespace DataLayer.Services
                     result = await _context_Procedures.Procedures.stp_search_user_for_authAsync(human.Login, human.Password);
                 }
 
+                Console.WriteLine($"[AUTH] Логин: {human.Login}, результат Any(): {result?.Any()}");
+
                 if (result?.Any() == true)
                 {
                     await GetHumanInfoAsync(human);
@@ -191,6 +193,7 @@ namespace DataLayer.Services
             {
                 var result = await _context_Procedures.Procedures.stp_search_admin_for_infoAsync(human.Login);
                 var dbAdmin = result.FirstOrDefault();
+                Console.WriteLine($"[DEBUG] Admin found: {dbAdmin != null}");
                 if (dbAdmin != null)
                 {
                     _currentHuman = new AdminsModel(
@@ -208,6 +211,7 @@ namespace DataLayer.Services
             {
                 var result = await _context_Procedures.Procedures.stp_search_user_for_infoAsync(human.Login);
                 var dbUser = result.FirstOrDefault();
+                Console.WriteLine($"[DEBUG] User '{human.Login}' found: {dbUser != null}");
                 if (dbUser != null)
                 {
                     _currentHuman = new UsersModel(
