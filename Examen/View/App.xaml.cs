@@ -1,10 +1,7 @@
-﻿using DataLayer.Services;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.DependencyInjection;
+﻿using Microsoft.Extensions.DependencyInjection;
 using System.Windows;
 using System.Windows.Controls;
 using View.Pages;
-using ViewModel.ModalWindowsViewModel;
 using ViewModel.PagesViewModel;
 using ViewModel.Services.Classes;
 using ViewModel.Services.Interfaces;
@@ -13,7 +10,7 @@ namespace View;
 
 public partial class App : Application
 {
-    public IServiceProvider Services { get; }
+    public IServiceProvider Services { get; private set; }
 
     public App()
     {
@@ -24,35 +21,24 @@ public partial class App : Application
 
     private void ConfigureServices(IServiceCollection services)
     {
-        string connectionString = "Server=(localdb)\\MSSQLLocalDB;Database=Examen_ModelFirst;Trusted_Connection=true;TrustServerCertificate=true;";
-        services.AddDbContext<DataLayer.Models.DataBaseContext>(options =>
-        options.UseSqlServer(connectionString));
-
-        services.AddDbContext<DataLayer.Procedures.DataBaseContext>(options =>
-            options.UseSqlServer(connectionString));
-
-        services.AddDbContext<DataLayer.Views.DataBaseContext>(options =>
-            options.UseSqlServer(connectionString));
-        services.AddScoped<Service>();
         services.AddSingleton<INavigateService, NavigateService>();
+        services.AddSingleton<IDialogService, DialogService>();
+
         services.AddTransient<LoginPageViewModel>();
         services.AddTransient<RegistrationPageViewModel>();
         services.AddTransient<AdminPageViewModel>();
         services.AddTransient<UserPageViewModel>();
-        services.AddSingleton<IDialogService, DialogService>();
-        services.AddTransient<RegistrationWindowViewModel>();
-
-        services.AddDbContext<DataLayer.Models.DataBaseContext>(options =>
-    options.UseSqlServer(connectionString));
+        services.AddTransient<ViewModel.ModalWindowsViewModel.RegistrationWindowViewModel>();
+        services.AddTransient<ViewModel.ModalWindowsViewModel.DeleteHumanWindowViewModel>();
     }
-    protected override async void OnStartup(StartupEventArgs e)
+    protected override void OnStartup(StartupEventArgs e)
     {
         try
         {
             base.OnStartup(e);
 
             var mainWindow = new ContainerWindow();
-            var navigateService = Services.GetService<INavigateService>();
+            var navigateService = Services.GetRequiredService<INavigateService>();
 
             if (navigateService == null)
                 throw new InvalidOperationException("NavigateService не зарегистрирован в DI.");
@@ -61,22 +47,20 @@ public partial class App : Application
 
             navigateService.Navigated += (pageName) =>
             {
-                Page? page = pageName switch
-                {
-                    "LoginPageView" => new LoginPageView(Services.GetRequiredService<LoginPageViewModel>()),
-                    "RegistrationPageView" => new RegistrationPageView(Services.GetRequiredService<RegistrationPageViewModel>()),
-                    "AdminPageView" => new AdminPageView(Services.GetRequiredService<AdminPageViewModel>()),
-                    "UserPageView" => new UserPageView(Services.GetRequiredService<UserPageViewModel>()),
-                    _ => null
-                };
+            Page? page = pageName switch
+            {
+                "LoginPageView" => CreateLoginPage(),
+                "RegistrationPageView" => CreateRegistrationPage(),
+                "AdminPageView" => CreateAdminPage(),
+                "UserPageView" => CreateUserPage(),
+                _ => null
+            };
 
                 if (page != null)
                     mainWindow.MainFrame.Navigate(page);
             };
 
             mainWindow.Show();
-
-            await InitializeAsync();
 
             navigateService.NavigateTo<LoginPageViewModel>();
         }
@@ -91,28 +75,17 @@ public partial class App : Application
             Current.Shutdown(-1);
         }
     }
-    private async Task InitializeAsync()
-    {
-        try
-        {
-            var service = Services.GetRequiredService<Service>();
-            var context = Services.GetRequiredService<DataLayer.Models.DataBaseContext>();
 
-            bool imagesExist = context.imagesSets.Any();
+    // Вспомогательные методы!
+    private Page CreateLoginPage() =>
+        new LoginPageView(Services.GetRequiredService<LoginPageViewModel>());
 
-            if (!imagesExist)
-            {
-                await service.AddPicturesToAllTablesAsync();
-            }
-        }
-        catch (Exception ex)
-        {
-            string fullErrorMessage = $"Ошибка в InitializeAsync:\n{ex.Message}\n\nСтек вызовов:\n{ex.StackTrace}";
-            MessageBox.Show(
-                fullErrorMessage,
-                "КРИТИЧЕСКАЯ ОШИБКА",
-                MessageBoxButton.OK,
-                MessageBoxImage.Error);
-        }
-    }
+    private Page CreateRegistrationPage() =>
+        new RegistrationPageView(Services.GetRequiredService<RegistrationPageViewModel>());
+
+    private Page CreateAdminPage() =>
+        new AdminPageView(Services.GetRequiredService<AdminPageViewModel>());
+
+    private Page CreateUserPage() =>
+        new UserPageView(Services.GetRequiredService<UserPageViewModel>());
 }

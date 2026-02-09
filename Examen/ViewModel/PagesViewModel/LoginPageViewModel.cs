@@ -1,92 +1,85 @@
-﻿using DataLayer.Services;
-using Model;
-using System.Windows;
+﻿using System.Windows;
 using System.Windows.Input;
 using ViewModel.Core;
+using ViewModel.Services.Classes;
 using ViewModel.Services.Interfaces;
 
 namespace ViewModel.PagesViewModel;
 public class LoginPageViewModel : BasePageViewModel
 {
-    public LoginPageViewModel() { } // Нужен для дизайнера
+    public LoginPageViewModel() { } // Для дизайнера
+
     private readonly INavigateService _navigateService;
-    private readonly Service _userService;
+    private readonly ApiAuthService _authService = new(); // ← HTTP-клиент
+
     public ICommand NavigateToSignIn { get; }
     public ICommand NavigateToRegistration { get; }
-    public LoginPageViewModel(INavigateService navigateService, Service userService)
+
+    public LoginPageViewModel(INavigateService navigateService)
     {
         _navigateService = navigateService;
-        _userService = userService;
-
-        NavigateToSignIn = new RelayCommand(OnLoginAsync);
-        NavigateToRegistration = new RelayCommand(obj => navigateService.NavigateTo<RegistrationPageViewModel>());
+        NavigateToSignIn = new RelayCommand(async _ => await OnLoginAsync());
+        NavigateToRegistration = new RelayCommand(_ => navigateService.NavigateTo<RegistrationPageViewModel>());
     }
-    private string _login;
-    private string _password;
+
+    private string _login = "";
+    private string _password = "";
+
     public string Login
     {
         get => _login;
-        set
-        {
-            Set(ref _login, value);
-            UpdateSignInButtonState();
-        }
+        set { Set(ref _login, value); UpdateSignInButtonState(); }
     }
+
     public string Password
     {
         get => _password;
-        set
-        {
-            Set(ref _password, value);
-            UpdateSignInButtonState();
-        }
+        set { Set(ref _password, value); UpdateSignInButtonState(); }
     }
-    private void UpdateSignInButtonState()
+
+    private async Task OnLoginAsync()
     {
-        IsEnabledNavigateToSignIn = !string.IsNullOrWhiteSpace(Login)
-                                && !string.IsNullOrWhiteSpace(Password);
-    }
-    private async void OnLoginAsync(object? obj)
-    {
-        if (string.IsNullOrWhiteSpace(Login) ||
-            string.IsNullOrWhiteSpace(Password))
+        if (string.IsNullOrWhiteSpace(Login) || string.IsNullOrWhiteSpace(Password))
         {
             MessageBox.Show("Заполните обязательные поля.");
             return;
         }
 
-        HumansModel user = new UsersModel(Login, Password);
-        HumansModel admin = new AdminsModel(Login, Password);
-
         try
         {
-            if (await _userService.OnLoginAsync(user))
+            var user = await _authService.LoginAsync(Login, Password);
+
+            if (user != null)
             {
-                _navigateService.NavigateTo<UserPageViewModel>();
-            }
-            else if(await _userService.OnLoginAsync(admin))
-            {
-                _navigateService.NavigateTo<AdminPageViewModel>();
+                // Сохрани данные пользователя (например, в статическом классе или сервисе)
+                CurrentUser.Instance.SetUser(user);
+
+                if (user.Type == "admin")
+                    _navigateService.NavigateTo<AdminPageViewModel>();
+                else
+                    _navigateService.NavigateTo<UserPageViewModel>();
             }
             else
             {
-                MessageBox.Show("Ошибка при авторизации.");
+                MessageBox.Show("Неверный логин или пароль.");
             }
         }
         catch (Exception ex)
         {
-            MessageBox.Show("Ошибка: " + ex.Message);
+            MessageBox.Show($"Ошибка: {ex.Message}");
         }
     }
-    
-    private bool _isEnabledNavigateToSignIn = false;
+
+    private bool _isEnabledNavigateToSignIn;
     public bool IsEnabledNavigateToSignIn
     {
         get => _isEnabledNavigateToSignIn;
-        set
-        {
-            _isEnabledNavigateToSignIn = value;
-            OnPropertyChanged();
-        }
+        set { Set(ref _isEnabledNavigateToSignIn, value); }
+    }
+
+    private void UpdateSignInButtonState()
+    {
+        IsEnabledNavigateToSignIn = !string.IsNullOrWhiteSpace(Login) &&
+                                   !string.IsNullOrWhiteSpace(Password);
     }
 }

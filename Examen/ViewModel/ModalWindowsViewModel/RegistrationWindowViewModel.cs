@@ -1,39 +1,34 @@
-﻿using DataLayer.Services;
-using Model;
+﻿#nullable enable
 using System.Windows;
 using System.Windows.Input;
 using ViewModel.Core;
+using ViewModel.Models;
+using ViewModel.Services;
 using ViewModel.Services.Interfaces;
 
 namespace ViewModel.ModalWindowsViewModel
 {
     public class RegistrationWindowViewModel : BasePageViewModel, IClosable
     {
-        public RegistrationWindowViewModel() { } // Нужен для дизайнера
-        private readonly Service _humanService;
+        private readonly ApiRegistrationService _registrationService = new();
         public ICommand SendFormRegistration { get; }
         public event Action? RequestClose;
 
-        private string _login;
-        private string _password;
-        private string _name;
-        private string _surname;
-        private string _patronymic;
-        private string _mail;
-        private string _phoneNumber;
-        public RegistrationWindowViewModel(Service humanService)
-        {
-            _humanService = humanService;
+        private string _login = "";
+        private string _password = "";
+        private string _name = "";
+        private string _surname = "";
+        private string _patronymic = "";
+        private string _mail = "";
+        private string _phoneNumber = "";
+        private string _humanType = "user";
 
-            SendFormRegistration = new RelayCommand(OnSendForm);
+        public RegistrationWindowViewModel()
+        {
+            SendFormRegistration = new RelayCommand(async _ => await OnSendForm());
         }
 
-        private string _humanType;
-        public void GetTypeHuman(string humanType)
-        {
-            _humanType = humanType;
-        }
-        private async void OnSendForm(object? obj)
+        private async Task OnSendForm()
         {
             if (string.IsNullOrWhiteSpace(Login) ||
                 string.IsNullOrWhiteSpace(Password) ||
@@ -45,37 +40,21 @@ namespace ViewModel.ModalWindowsViewModel
                 return;
             }
 
-            HumansModel human;
-            if (_humanType == "user")
+            var request = new RegisterRequest
             {
-                human = new UsersModel
-                (
-                    Login,
-                    Password,
-                    Name,
-                    Surname,
-                    Patronymic,
-                    Mail,
-                    PhoneNumber
-                );
-            }
-            else
-            {
-                human = new AdminsModel
-                (
-                    Login,
-                    Password,
-                    Name,
-                    Surname,
-                    Patronymic,
-                    Mail,
-                    PhoneNumber
-                );
-            }                
+                Login = Login,
+                Password = Password,
+                Name = Name,
+                Surname = Surname,
+                Patronymic = Patronymic,
+                Mail = Mail,
+                PhoneNumber = PhoneNumber,
+                HumanType = _humanType
+            };
 
             try
             {
-                int newId = await _humanService.AddHumanAsync(human);
+                int newId = await _registrationService.RegisterAsync(request);
 
                 if (newId > 0)
                 {
@@ -84,7 +63,7 @@ namespace ViewModel.ModalWindowsViewModel
                 }
                 else
                 {
-                    MessageBox.Show("Ошибка при добавлении.");
+                    MessageBox.Show("Ошибка при регистрации.");
                 }
             }
             catch (Exception ex)
@@ -96,87 +75,64 @@ namespace ViewModel.ModalWindowsViewModel
         public string Login
         {
             get => _login;
-            set
-            {
-                Set(ref _login, value);
-                UpdateSendButtonState();
-            }
+            set { Set(ref _login, value); UpdateSendButtonState(); }
         }
+
         public string Password
         {
             get => _password;
-            set
-            {
-                Set(ref _password, value);
-                UpdateSendButtonState();
-            }
+            set { Set(ref _password, value); UpdateSendButtonState(); }
         }
+
         public string Name
         {
             get => _name;
-            set
-            {
-                Set(ref _name, value);
-                UpdateSendButtonState();
-            }
+            set { Set(ref _name, value); UpdateSendButtonState(); }
         }
+
         public string Surname
         {
             get => _surname;
-            set
-            {
-                Set(ref _surname, value);
-                UpdateSendButtonState();
-            }
+            set { Set(ref _surname, value); UpdateSendButtonState(); }
         }
+
         public string Patronymic
         {
             get => _patronymic;
-            set
-            {
-                Set(ref _patronymic, value);
-                UpdateSendButtonState();
-            }
+            set { Set(ref _patronymic, value); UpdateSendButtonState(); }
         }
+
         public string Mail
         {
             get => _mail;
-            set
-            {
-                Set(ref _mail, value);
-                UpdateSendButtonState();
-            }
+            set { Set(ref _mail, value); UpdateSendButtonState(); }
         }
+
         public string PhoneNumber
         {
             get => _phoneNumber;
-            set
-            {
-                Set(ref _phoneNumber, value);
-                UpdateSendButtonState();
-            }
+            set { Set(ref _phoneNumber, value); UpdateSendButtonState(); }
         }
+
         private void UpdateSendButtonState()
         {
             IsEnabledSendFormRegistration = !string.IsNullOrWhiteSpace(Login)
                                         && !string.IsNullOrWhiteSpace(Password)
                                         && !string.IsNullOrWhiteSpace(Name)
                                         && !string.IsNullOrWhiteSpace(Surname)
-                                        && !string.IsNullOrWhiteSpace(Patronymic)
-                                        && !string.IsNullOrWhiteSpace(Mail)
-                                        && !string.IsNullOrWhiteSpace(PhoneNumber);
-
+                                        && !string.IsNullOrWhiteSpace(Mail);
         }
-        private bool _isEnabledSendFormRegistration = false;
 
+        private bool _isEnabledSendFormRegistration;
         public bool IsEnabledSendFormRegistration
         {
             get => _isEnabledSendFormRegistration;
-            set
-            {
-                _isEnabledSendFormRegistration = value;
-                OnPropertyChanged();
-            }
+            set { Set(ref _isEnabledSendFormRegistration, value); }
+        }
+
+        public void SetHumanType(string humanType)
+        {
+            _humanType = humanType;
         }
     }
 }

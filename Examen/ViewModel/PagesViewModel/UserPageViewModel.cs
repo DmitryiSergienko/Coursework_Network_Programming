@@ -1,98 +1,134 @@
-﻿using DataLayer.Services;
+﻿#nullable enable
 using System.Data;
 using System.IO;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media.Imaging;
 using ViewModel.Core;
+using ViewModel.Services;
 using ViewModel.Services.Interfaces;
 
-namespace ViewModel.PagesViewModel;
-public class UserPageViewModel : BasePageViewModel
+namespace ViewModel.PagesViewModel
 {
-    public UserPageViewModel() { } // Нужен для дизайнера
-    private readonly INavigateService _navigateService;
-    private readonly Service _service;
-    private readonly DataLayer.Models.DataBaseContext _dbContext;
-    public string? LoginUser => _service.CurrentHuman?.Login;
-    public string? NameUser => _service.CurrentHuman?.Name;
-    public string? SurnameUser => _service.CurrentHuman?.Surname;
-    public string? EmailUser => _service.CurrentHuman?.Mail;
-    public string? PhoneUser => _service.CurrentHuman?.PhoneNumber;
-    public ICommand LogOut { get; }
-    public ICommand ShowTop3Products { get; }
-    public ICommand SearchProductByName { get; }
-    public ICommand SearchProductByPrice { get; }
-    public ICommand ShowProductInCategory { get; }
-    public ICommand ShowProductInPortions { get; }
-    public ICommand SearchOrdersByDate { get; }
-    public ICommand ShowUserOrderHistory { get; }
-    public ICommand CreateOrder { get; }
-    public ICommand ShowAllProducts { get; }
-
-    private int _skipRows = 0;
-    private int _countPortions;
-    public int CountPortions 
-    { 
-        get => _countPortions;
-        set
-        {
-            Set(ref _countPortions, value);
-            UpdateCountPortionsButtonState();
-        }
-    }
-    public ICommand EnterCountPortions { get; }
-    public ICommand LeftArrowCountPortions { get; }
-    public ICommand RightArrowCountPortions { get; }
-
-    private DataTable _data;
-    public DataTable Data
+    public class UserPageViewModel : BasePageViewModel
     {
-        get => _data;
-        set
-        {
-            _data = value;
-            OnPropertyChanged();
-        }
-    }
-    public UserPageViewModel(INavigateService navigateService, Service service, DataLayer.Models.DataBaseContext dbContext)
-    {
-        _navigateService = navigateService;
-        _service = service;
-        _dbContext = dbContext;
+        public UserPageViewModel() { // Для дизайнера XAML
+            LogOut = new RelayCommand(_ => { });
+            ShowTop3Products = new AsyncRelayCommand(async () => { });
+            SearchProductByName = new RelayCommand(_ => { });
+            SearchProductByPrice = new RelayCommand(_ => { });
+            ShowProductInCategory = new RelayCommand(_ => { });
+            ShowProductInPortions = new RelayCommand(_ => { });
+            SearchOrdersByDate = new RelayCommand(_ => { });
+            ShowUserOrderHistory = new AsyncRelayCommand(async () => { });
+            CreateOrder = new RelayCommand(_ => { });
+            ShowAllProducts = new RelayCommand(_ => { });
+            EnterCountPortions = new AsyncRelayCommand(async () => { });
+            LeftArrowCountPortions = new AsyncRelayCommand(async () => { });
+            RightArrowCountPortions = new AsyncRelayCommand(async () => { });
+        } 
 
-        LogOut = new RelayCommand(obj =>
+        private readonly INavigateService? _navigateService;
+        private readonly ApiUserService _apiService = new();
+
+        // Данные пользователя
+        public string? LoginUser { get; set; }
+        public string? NameUser { get; set; }
+        public string? SurnameUser { get; set; }
+        public string? EmailUser { get; set; }
+        public string? PhoneUser { get; set; }
+
+        // Команды
+        public ICommand LogOut { get; private set; }
+        public ICommand ShowTop3Products { get; private set; }
+        public ICommand SearchProductByName { get; private set; }
+        public ICommand SearchProductByPrice { get; private set; }
+        public ICommand ShowProductInCategory { get; private set; }
+        public ICommand ShowProductInPortions { get; private set; }
+        public ICommand SearchOrdersByDate { get; private set; }
+        public ICommand ShowUserOrderHistory { get; private set; }
+        public ICommand CreateOrder { get; private set; }
+        public ICommand ShowAllProducts { get; private set; }
+        public ICommand EnterCountPortions { get; private set; }
+        public ICommand LeftArrowCountPortions { get; private set; }
+        public ICommand RightArrowCountPortions { get; private set; }
+
+        // Пагинация
+        private int _skipRows = 0;
+        private int _countPortions;
+        public int CountPortions
+        {
+            get => _countPortions;
+            set { Set(ref _countPortions, value); UpdateCountPortionsButtonState(); }
+        }
+
+        // Данные для отображения
+        private DataTable _data = new();
+        public DataTable Data
+        {
+            get => _data;
+            set { Set(ref _data, value); }
+        }
+
+        // Видимость формы пагинации
+        private Visibility _isPortionsFormVisible = Visibility.Collapsed;
+        public Visibility IsPortionsFormVisible
+        {
+            get => _isPortionsFormVisible;
+            set { Set(ref _isPortionsFormVisible, value); }
+        }
+
+        // Состояние кнопки
+        private bool _enterCountPortionsIsEnabled;
+        public bool EnterCountPortionsIsEnabled
+        {
+            get => _enterCountPortionsIsEnabled;
+            set { Set(ref _enterCountPortionsIsEnabled, value); }
+        }
+
+        // Основной конструктор
+        public UserPageViewModel(INavigateService navigateService) : this()
+        {
+            _navigateService = navigateService;
+
+            // Перенастройка команд с реальной логикой
+            LogOut = new RelayCommand(_ => OnLogOut());
+            ShowTop3Products = new AsyncRelayCommand(async () => await OnShowTop3Products());
+            SearchProductByName = new RelayCommand(_ => { });
+            SearchProductByPrice = new RelayCommand(_ => { });
+            ShowProductInCategory = new RelayCommand(_ => { });
+            ShowProductInPortions = new RelayCommand(_ => OnShowProductInPortions());
+            SearchOrdersByDate = new RelayCommand(_ => { });
+            ShowUserOrderHistory = new AsyncRelayCommand(async () => await OnShowUserOrderHistory());
+            CreateOrder = new RelayCommand(_ => { });
+            ShowAllProducts = new RelayCommand(_ => { });
+            EnterCountPortions = new AsyncRelayCommand(async () => await OnEnterCountPortions());
+            LeftArrowCountPortions = new AsyncRelayCommand(async () => await OnLeftArrowCountPortions());
+            RightArrowCountPortions = new AsyncRelayCommand(async () => await OnRightArrowCountPortions());
+        }
+
+        private void OnLogOut()
         {
             IsPortionsFormVisible = Visibility.Collapsed;
-            service.LogOut();
-            navigateService.NavigateTo<LoginPageViewModel>();
-        });
-        ShowTop3Products = new AsyncRelayCommand(async () =>
+            if (_navigateService != null)
+                _navigateService.NavigateTo<LoginPageViewModel>();
+        }
+
+        private async Task OnShowTop3Products()
         {
             try
             {
                 IsPortionsFormVisible = Visibility.Collapsed;
-                var result = await _service.GetTop3ProductsAsync();
-                Data = await AddImageColumnAsync(result);
+                var result = await _apiService.GetTop3ProductsAsync();
+                Data = result;
             }
             catch (Exception ex)
             {
                 MessageBox.Show("Ошибка: " + ex.Message);
             }
-        });
-        SearchProductByName = new RelayCommand(async obj => 
-        {
-            IsPortionsFormVisible = Visibility.Collapsed;
-        });
-        SearchProductByPrice = new RelayCommand(async obj => 
-        {
-            IsPortionsFormVisible = Visibility.Collapsed;
-        });
-        ShowProductInCategory = new RelayCommand(async obj => 
-        {
-            IsPortionsFormVisible = Visibility.Collapsed;
-        });
-        ShowProductInPortions = new RelayCommand(async obj => 
+        }
+
+        private void OnShowProductInPortions()
         {
             try
             {
@@ -102,20 +138,22 @@ public class UserPageViewModel : BasePageViewModel
             {
                 MessageBox.Show("Ошибка: " + ex.Message);
             }
-        });
-        EnterCountPortions = new AsyncRelayCommand(async () =>
+        }
+
+        private async Task OnEnterCountPortions()
         {
             try
             {
-                var result = await _service.GetShowProductsInPortionsAsync(_skipRows, CountPortions);
-                Data = await AddImageColumnAsync(result);
+                var result = await _apiService.GetShowProductsInPortionsAsync(_skipRows, CountPortions);
+                Data = result;
             }
             catch (Exception ex)
             {
                 MessageBox.Show("Ошибка: " + ex.Message);
             }
-        });
-        LeftArrowCountPortions = new AsyncRelayCommand(async () =>
+        }
+
+        private async Task OnLeftArrowCountPortions()
         {
             try
             {
@@ -124,164 +162,85 @@ public class UserPageViewModel : BasePageViewModel
                     _skipRows -= CountPortions;
                     if (_skipRows < 0) _skipRows = 0;
                 }
-                var result = await _service.GetShowProductsInPortionsAsync(_skipRows, CountPortions);
-                Data = await AddImageColumnAsync(result);
+                var result = await _apiService.GetShowProductsInPortionsAsync(_skipRows, CountPortions);
+                Data = result;
             }
             catch (Exception ex)
             {
                 MessageBox.Show("Ошибка: " + ex.Message);
             }
-        });
-        RightArrowCountPortions = new AsyncRelayCommand(async () =>
+        }
+
+        private async Task OnRightArrowCountPortions()
         {
             try
             {
-                var products = await _service.GetListAllProductsAsync();
-                var totalCount = products.Count;
-                var maxSkipRows = (totalCount / CountPortions) * CountPortions;
+                var totalCount = await _apiService.GetTotalProductsCountAsync();
                 if (_skipRows + CountPortions < totalCount)
                 {
                     _skipRows += CountPortions;
-                    var result = await _service.GetShowProductsInPortionsAsync(_skipRows, CountPortions);
-                    Data = await AddImageColumnAsync(result);
+                    var result = await _apiService.GetShowProductsInPortionsAsync(_skipRows, CountPortions);
+                    Data = result;
                 }
             }
             catch (Exception ex)
             {
                 MessageBox.Show("Ошибка: " + ex.Message);
             }
-        });
-        SearchOrdersByDate = new RelayCommand(async obj => 
-        {
-            IsPortionsFormVisible = Visibility.Collapsed;
-        });
-        ShowUserOrderHistory = new AsyncRelayCommand(async () =>
+        }
+
+        private async Task OnShowUserOrderHistory()
         {
             try
             {
                 IsPortionsFormVisible = Visibility.Collapsed;
-                var result = await _service.GetUserOrderHistoryAsync();
-                Data = await AddImageColumnAsync(result);
+                var result = await _apiService.GetUserOrderHistoryAsync();
+                Data = result;
             }
             catch (Exception ex)
             {
                 MessageBox.Show("Ошибка: " + ex.Message);
             }
-        });
-        CreateOrder = new RelayCommand(async obj => 
-        {
-            IsPortionsFormVisible = Visibility.Collapsed;
-        });
-        ShowAllProducts = new RelayCommand(async obj => 
-        {
-            IsPortionsFormVisible = Visibility.Collapsed;
-        });
-    }
-
-    private Visibility _isPortionsFormVisible = Visibility.Collapsed;
-    public Visibility IsPortionsFormVisible
-    {
-        get => _isPortionsFormVisible;
-        set
-        {
-            _isPortionsFormVisible = value;
-            OnPropertyChanged();
         }
-    }
 
-    private bool _enterCountPortionsIsEnabled = false;
-    public bool EnterCountPortionsIsEnabled
-    {
-        get => _enterCountPortionsIsEnabled;
-        set
+        private void UpdateCountPortionsButtonState()
         {
-            _enterCountPortionsIsEnabled = value;
-            OnPropertyChanged();
+            EnterCountPortionsIsEnabled = CountPortions > 0;
         }
-    }
-    private void UpdateCountPortionsButtonState()
-    {
-        EnterCountPortionsIsEnabled = CountPortions > 0;
-    }
 
-    private byte[] _imageData;
-    public byte[] ImageData
-    {
-        get => _imageData;
-        set
+        // Изображения
+        private byte[]? _imageData;
+        public byte[]? ImageData
         {
-            if (Set(ref _imageData, value))
+            get => _imageData;
+            set { Set(ref _imageData, value); }
+        }
+
+        public BitmapImage? Image
+        {
+            get
             {
-                OnPropertyChanged(nameof(Image));
-            }
-        }
-    }
-    public BitmapImage Image
-    {
-        get
-        {
-            if (_imageData == null || _imageData.Length == 0)
-                return null;
+                if (_imageData == null || _imageData.Length == 0)
+                    return null;
 
-            try
-            {
-                var image = new BitmapImage();
-                using (var stream = new MemoryStream(_imageData))
+                try
                 {
-                    image.BeginInit();
-                    image.StreamSource = stream;
-                    image.CacheOption = BitmapCacheOption.OnLoad;
-                    image.EndInit();
-                    image.Freeze();
+                    var image = new BitmapImage();
+                    using (var stream = new MemoryStream(_imageData))
+                    {
+                        image.BeginInit();
+                        image.StreamSource = stream;
+                        image.CacheOption = BitmapCacheOption.OnLoad;
+                        image.EndInit();
+                        image.Freeze();
+                    }
+                    return image;
                 }
-                return image;
-            }
-            catch
-            {
-                return null;
-            }
-        }
-    }
-    private async Task<DataTable> AddImageColumnAsync(DataTable table)
-    {
-        // Проверяем, есть ли в таблице столбец "images_id"
-        if (!table.Columns.Contains("images_id"))
-        {
-            // Если столбца нет — просто возвращаем исходную таблицу. НИЧЕГО НЕ ЛОМАЕМ.
-            return table;
-        }
-
-        try
-        {
-            // Добавляем новый столбец для хранения данных изображения
-            table.Columns.Add("Image", typeof(byte[]));
-
-            // Проходим по каждой строке и заполняем столбец "Image"
-            foreach (DataRow row in table.Rows)
-            {
-                if (row["images_id"] != DBNull.Value && int.TryParse(row["images_id"].ToString(), out int imageId))
+                catch
                 {
-                    var imageEntity = await _dbContext.imagesSets.FindAsync(imageId);
-                    row["Image"] = imageEntity?.image; // Присваиваем массив байт или null
-                }
-                else
-                {
-                    // Если images_id null или не число — оставляем Image как null
-                    row["Image"] = DBNull.Value;
+                    return null;
                 }
             }
-
-            // Удаляем старый столбец "images_id", чтобы он не отображался
-            table.Columns.Remove("images_id");
         }
-        catch (Exception ex)
-        {
-            // Логируем ошибку, но НЕ ПРОПУСКАЕМ исключение!
-            Console.WriteLine($"⚠️ Ошибка при добавлении столбца Image: {ex.Message}");
-            // Если что-то пошло не так, возвращаем исходную таблицу без изменений
-            return table;
-        }
-
-        return table;
     }
 }

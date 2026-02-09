@@ -1,196 +1,125 @@
-﻿using DataLayer.Services;
-using Microsoft.Data.SqlClient;
+﻿#nullable enable
 using System.Data;
-using System.IO;
 using System.Windows.Input;
-using System.Windows.Media.Imaging;
 using ViewModel.Core;
 using ViewModel.ModalWindowsViewModel;
+using ViewModel.Services;
 using ViewModel.Services.Interfaces;
 
-namespace ViewModel.PagesViewModel;
-public class AdminPageViewModel : BasePageViewModel
+namespace ViewModel.PagesViewModel
 {
-    public AdminPageViewModel() { } // Нужен для дизайнера
-
-    private readonly INavigateService _navigateService;
-    private readonly Service _service;
-    private readonly IDialogService _iDialogService;
-    private readonly DataLayer.Models.DataBaseContext _dbContext;
-    public string? LoginAdmin => _service.CurrentHuman?.Login;
-    public string? NameAdmin => _service.CurrentHuman?.Name;
-    public string? SurnameAdmin => _service.CurrentHuman?.Surname;
-    public string? EmailAdmin => _service.CurrentHuman?.Mail;
-    public string? PhoneAdmin => _service.CurrentHuman?.PhoneNumber;
-    public ICommand LogOut { get; }
-    public ICommand AddUser { get; }
-    public ICommand UpdateUser { get; }
-    public ICommand DeleteUser { get; }
-    public ICommand AddAdmin { get; }
-    public ICommand UpdateAdmin { get; }
-    public ICommand DeleteAdmin { get; }
-    public ICommand AddProduct { get; }
-    public ICommand UpdateProduct { get; }
-    public ICommand DeleteProduct { get; }
-    public ICommand AddCategory { get; }
-    public ICommand UpdateCategory { get; }
-    public ICommand DeleteCategory { get; }
-    public ICommand AddQuantityProduct { get; }
-
-    private string _inputArea;
-    public string InputArea
+    public class AdminPageViewModel : BasePageViewModel
     {
-        get => _inputArea;
-        set
+        public AdminPageViewModel() { } // Для дизайнера XAML
+
+        private readonly ApiAdminService _apiService = new();
+        private readonly INavigateService? _navigateService;
+
+        // Данные администратора
+        public string? LoginAdmin { get; set; }
+        public string? NameAdmin { get; set; }
+        public string? SurnameAdmin { get; set; }
+        public string? EmailAdmin { get; set; }
+        public string? PhoneAdmin { get; set; }
+
+        // Команды (обязательно инициализируем!)
+        public ICommand LogOut { get; private set; } = null!;
+        public ICommand AddUser { get; private set; } = null!;
+        public ICommand UpdateUser { get; private set; } = null!;
+        public ICommand DeleteUser { get; private set; } = null!;
+        public ICommand AddAdmin { get; private set; } = null!;
+        public ICommand UpdateAdmin { get; private set; } = null!;
+        public ICommand DeleteAdmin { get; private set; } = null!;
+        public ICommand AddProduct { get; private set; } = null!;
+        public ICommand UpdateProduct { get; private set; } = null!;
+        public ICommand DeleteProduct { get; private set; } = null!;
+        public ICommand AddCategory { get; private set; } = null!;
+        public ICommand UpdateCategory { get; private set; } = null!;
+        public ICommand DeleteCategory { get; private set; } = null!;
+        public ICommand AddQuantityProduct { get; private set; } = null!;
+        public ICommand ExecuteQueryCommand { get; private set; } = null!;
+
+        // SQL-запрос
+        private string _inputArea = "";
+        public string InputArea
         {
-            _inputArea = value;
-            OnPropertyChanged();
+            get => _inputArea;
+            set { Set(ref _inputArea, value); }
         }
-    }
-    private DataTable _dataTableAdmin;
-    public DataTable DataTableAdmin
-    {
-        get => _dataTableAdmin;
-        set
+
+        // Результат запроса
+        private DataTable _dataTableAdmin = new();
+        public DataTable DataTableAdmin
         {
-            _dataTableAdmin = value;
-            OnPropertyChanged();
+            get => _dataTableAdmin;
+            set { Set(ref _dataTableAdmin, value); }
         }
-    }
-    public ICommand ExecuteQueryCommand { get; }
-    public AdminPageViewModel(INavigateService navigateService, IDialogService iDialogService, Service service, DataLayer.Models.DataBaseContext dbContext)
-    {
-        _navigateService = navigateService;
-        _iDialogService = iDialogService;
-        _service = service;
-        _dbContext = dbContext;
 
-        LogOut = new RelayCommand(obj =>
+        // Конструктор для DI
+        public AdminPageViewModel(INavigateService navigateService)
         {
-            service.LogOut();
-            navigateService.NavigateTo<LoginPageViewModel>();
-        });
+            _navigateService = navigateService;
 
-        ExecuteQueryCommand = new RelayCommand(ExecuteQuery);
-        DataTableAdmin = new DataTable();
+            // Обязательная инициализация всех команд
+            LogOut = new RelayCommand(_ => OnLogOut());
+            AddUser = new RelayCommand(_ => OnAddUser());
+            UpdateUser = new RelayCommand(_ => { });
+            DeleteUser = new RelayCommand(_ => OnDeleteUser());
+            AddAdmin = new RelayCommand(_ => OnAddAdmin());
+            UpdateAdmin = new RelayCommand(_ => { });
+            DeleteAdmin = new RelayCommand(_ => OnDeleteAdmin());
+            AddProduct = new RelayCommand(_ => { });
+            UpdateProduct = new RelayCommand(_ => { });
+            DeleteProduct = new RelayCommand(_ => { });
+            AddCategory = new RelayCommand(_ => { });
+            UpdateCategory = new RelayCommand(_ => { });
+            DeleteCategory = new RelayCommand(_ => { });
+            AddQuantityProduct = new RelayCommand(_ => { });
+            ExecuteQueryCommand = new RelayCommand(_ => ExecuteQuery());
+        }
 
-        AddUser = new RelayCommand(async obj =>
+        private void OnLogOut()
         {
-            var vm = new RegistrationWindowViewModel(_service);
-            vm.GetTypeHuman("user");                            
-            _iDialogService.ShowModal(vm);                      
-        });
-        UpdateUser = new RelayCommand(async obj => { });
-        DeleteUser = new RelayCommand(async obj => 
+            _navigateService?.NavigateTo<LoginPageViewModel>();
+        }
+
+        private void OnAddUser()
         {
-            var vm = new DeleteHumanWindowViewModel(_service);
+            var vm = new RegistrationWindowViewModel();
+            vm.SetHumanType("user");
+        }
+
+        private void OnDeleteUser()
+        {
+            var vm = new DeleteHumanWindowViewModel();
             vm.HumanType = "user";
-            _iDialogService.ShowModal(vm);
-        });
-        AddAdmin = new RelayCommand(async obj =>
+        }
+
+        private void OnAddAdmin()
         {
-            var vm = new RegistrationWindowViewModel(_service);
-            vm.GetTypeHuman("admin");
-            _iDialogService.ShowModal(vm);
-        });
-        UpdateAdmin = new RelayCommand(async obj => { });
-        DeleteAdmin = new RelayCommand(async obj => 
+            var vm = new RegistrationWindowViewModel();
+            vm.SetHumanType("admin");
+        }
+
+        private void OnDeleteAdmin()
         {
-            var vm = new DeleteHumanWindowViewModel(_service);
+            var vm = new DeleteHumanWindowViewModel();
             vm.HumanType = "admin";
-            _iDialogService.ShowModal(vm);
-        });
-        AddProduct = new RelayCommand(async obj => { });
-        UpdateProduct = new RelayCommand(async obj => { });
-        DeleteProduct = new RelayCommand(async obj => { });
-        AddCategory = new RelayCommand(async obj => { });
-        UpdateCategory = new RelayCommand(async obj => { });
-        DeleteCategory = new RelayCommand(async obj => { });
-        AddQuantityProduct = new RelayCommand(async obj => { });
-    }
-    private async void ExecuteQuery(object parameter)
-    {
-        try
-        {
-            string connectionString = "Server=(localdb)\\MSSQLLocalDB;Database=Examen_ModelFirst;User Id=user1;Password=sa;TrustServerCertificate=True;";
-            using (var connection = new SqlConnection(connectionString))
-            {
-                connection.Open();
-                using (var command = new SqlCommand(InputArea, connection))
-                using (var adapter = new SqlDataAdapter(command))
-                {
-                    var resultTable = new DataTable();
-                    adapter.Fill(resultTable);
-
-                    // Проверяем, есть ли в таблице столбец "images_id"
-                    if (resultTable.Columns.Contains("images_id"))
-                    {
-                        // Добавляем новый столбец для хранения данных изображения
-                        resultTable.Columns.Add("Image", typeof(byte[]));
-
-                        // Проходим по каждой строке и заполняем столбец "Image"
-                        foreach (DataRow row in resultTable.Rows)
-                        {
-                            if (row["images_id"] != DBNull.Value && int.TryParse(row["images_id"].ToString(), out int imageId))
-                            {
-                                // Используем _dbContext для поиска изображения
-                                var imageEntity = await _dbContext.imagesSets.FindAsync(imageId);
-                                row["Image"] = imageEntity?.image; // Присваиваем массив байт или null
-                            }
-                        }
-
-                        // Удаляем старый столбец "images_id", чтобы он не отображался
-                        resultTable.Columns.Remove("images_id");
-                    }
-
-                    DataTableAdmin = resultTable;
-                }
-            }
         }
-        catch (Exception ex)
-        {
-            var errorTable = new DataTable();
-            errorTable.Columns.Add("Ошибка", typeof(string));
-            errorTable.Rows.Add(ex.Message);
-            DataTableAdmin = errorTable;
-        }
-    }
 
-    private byte[] _imageData;
-    public byte[] ImageData
-    {
-        get => _imageData;
-        set
+        private async void ExecuteQuery()
         {
-            if (Set(ref _imageData, value))
-            {
-                OnPropertyChanged(nameof(Image));
-            }
-        }
-    }
-    public BitmapImage Image
-    {
-        get
-        {
-            if (_imageData == null || _imageData.Length == 0)
-                return null;
-
             try
             {
-                var image = new BitmapImage();
-                using (var stream = new MemoryStream(_imageData))
-                {
-                    image.BeginInit();
-                    image.StreamSource = stream;
-                    image.CacheOption = BitmapCacheOption.OnLoad;
-                    image.EndInit();
-                    image.Freeze();
-                }
-                return image;
+                var result = await _apiService.ExecuteSqlQueryAsync(InputArea);
+                DataTableAdmin = result;
             }
-            catch
+            catch (Exception ex)
             {
-                return null;
+                var errorTable = new DataTable();
+                errorTable.Columns.Add("Ошибка", typeof(string));
+                errorTable.Rows.Add(ex.Message);
+                DataTableAdmin = errorTable;
             }
         }
     }

@@ -1,4 +1,5 @@
-﻿using Microsoft.Extensions.DependencyInjection;
+﻿#nullable enable
+using Microsoft.Extensions.DependencyInjection;
 using System.Windows.Controls;
 using ViewModel.Core;
 using ViewModel.ModalWindowsViewModel;
@@ -10,7 +11,7 @@ namespace ViewModel.Services.Classes;
 public class NavigateService : INavigateService
 {
     private readonly IServiceProvider _provider;
-    private Frame _frame;
+    private Frame? _frame;
 
     public NavigateService(IServiceProvider provider)
     {

@@ -1,159 +1,137 @@
-﻿using DataLayer.Services;
-using Model;
-using System.Windows;
+﻿using System.Windows;
 using System.Windows.Input;
 using ViewModel.Core;
+using ViewModel.Models;
+using ViewModel.Services;
 using ViewModel.Services.Interfaces;
 
-namespace ViewModel.PagesViewModel;
-public class RegistrationPageViewModel : BasePageViewModel
+namespace ViewModel.PagesViewModel
 {
-    public RegistrationPageViewModel() { } // Нужен для дизайнера
-    private readonly INavigateService _navigateService;
-    private readonly Service _userService;
-    public ICommand BackToLoginPage { get; }
-    public ICommand SendFormRegistration { get; }
-
-    private string _login;
-    private string _password;
-    private string _name;
-    private string _surname;
-    private string _patronymic;
-    private string _mail;
-    private string _phoneNumber;
-    public RegistrationPageViewModel(INavigateService navigateService, Service userService)
+    public class RegistrationPageViewModel : BasePageViewModel
     {
-        _navigateService = navigateService;
-        _userService = userService;
+        public RegistrationPageViewModel() { } // Для дизайнера XAML
 
-        BackToLoginPage = new RelayCommand(obj => navigateService.NavigateTo<LoginPageViewModel>());
-        SendFormRegistration = new RelayCommand(OnSendForm);
-    }
-    private async void OnSendForm(object? obj)
-    {
-        if (string.IsNullOrWhiteSpace(Login) ||
-            string.IsNullOrWhiteSpace(Password) ||
-            string.IsNullOrWhiteSpace(Name) ||
-            string.IsNullOrWhiteSpace(Surname) ||
-            string.IsNullOrWhiteSpace(Mail))
+        private readonly INavigateService _navigateService;
+        private readonly ApiRegistrationService _registrationService = new();
+
+        public ICommand BackToLoginPage { get; }
+        public ICommand SendFormRegistration { get; }
+
+        private string _login = "";
+        private string _password = "";
+        private string _name = "";
+        private string _surname = "";
+        private string _patronymic = "";
+        private string _mail = "";
+        private string _phoneNumber = "";
+
+        public RegistrationPageViewModel(INavigateService navigateService)
         {
-            MessageBox.Show("Заполните обязательные поля.");
-            return;
+            _navigateService = navigateService;
+            BackToLoginPage = new RelayCommand(_ => _navigateService.NavigateTo<LoginPageViewModel>());
+            SendFormRegistration = new RelayCommand(_ => OnSendForm());
         }
 
-        var user = new UsersModel
-        (
-            Login,
-            Password,
-            Name,
-            Surname,
-            Patronymic,
-            Mail,
-            PhoneNumber
-        );
-
-        try
+        private async void OnSendForm()
         {
-            int newId = await _userService.AddHumanAsync(user);
-
-            if (newId > 0)
+            if (string.IsNullOrWhiteSpace(Login) ||
+                string.IsNullOrWhiteSpace(Password) ||
+                string.IsNullOrWhiteSpace(Name) ||
+                string.IsNullOrWhiteSpace(Surname) ||
+                string.IsNullOrWhiteSpace(Mail))
             {
-                MessageBox.Show($"Регистрация успешна! ID: {newId}");
-                _navigateService.NavigateTo<LoginPageViewModel>();
+                MessageBox.Show("Заполните обязательные поля.");
+                return;
             }
-            else
-            {
-                MessageBox.Show("Ошибка при добавлении пользователя.");
-            }
-        }
-        catch (Exception ex)
-        {
-            MessageBox.Show("Ошибка: " + ex.Message);
-        }
-    }
 
-    public string Login
-    {
-        get => _login;
-        set
-        {
-            Set(ref _login, value);
-            UpdateSendButtonState();
-        } 
-    }
-    public string Password
-    {
-        get => _password;
-        set
-        {
-            Set(ref _password, value);
-            UpdateSendButtonState();
+            var request = new RegisterRequest
+            {
+                Login = Login,
+                Password = Password,
+                Name = Name,
+                Surname = Surname,
+                Patronymic = Patronymic,
+                Mail = Mail,
+                PhoneNumber = PhoneNumber,
+                HumanType = "user" // или "admin" если нужно
+            };
+
+            try
+            {
+                int newId = await _registrationService.RegisterAsync(request);
+
+                if (newId > 0)
+                {
+                    MessageBox.Show($"Регистрация успешна! ID: {newId}");
+                    _navigateService.NavigateTo<LoginPageViewModel>();
+                }
+                else
+                {
+                    MessageBox.Show("Ошибка при регистрации.");
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Ошибка: " + ex.Message);
+            }
         }
-    }
-    public string Name
-    {
-        get => _name;
-        set
+
+        public string Login
         {
-            Set(ref _name, value);
-            UpdateSendButtonState();
+            get => _login;
+            set { Set(ref _login, value); UpdateSendButtonState(); }
         }
-    }
-    public string Surname
-    {
-        get => _surname;
-        set
+
+        public string Password
         {
-            Set(ref _surname, value);
-            UpdateSendButtonState();
+            get => _password;
+            set { Set(ref _password, value); UpdateSendButtonState(); }
         }
-    }
-    public string Patronymic
-    {
-        get => _patronymic;
-        set
+
+        public string Name
         {
-            Set(ref _patronymic, value);
-            UpdateSendButtonState();
+            get => _name;
+            set { Set(ref _name, value); UpdateSendButtonState(); }
         }
-    }
-    public string Mail
-    {
-        get => _mail;
-        set
+
+        public string Surname
         {
-            Set(ref _mail, value);
-            UpdateSendButtonState();
+            get => _surname;
+            set { Set(ref _surname, value); UpdateSendButtonState(); }
         }
-    }
-    public string PhoneNumber
-    {
-        get => _phoneNumber;
-        set
+
+        public string Patronymic
         {
-            Set(ref _phoneNumber, value);
-            UpdateSendButtonState();
+            get => _patronymic;
+            set { Set(ref _patronymic, value); UpdateSendButtonState(); }
         }
-    }
-    private void UpdateSendButtonState()
-    {
-        IsEnabledSendFormRegistration = !string.IsNullOrWhiteSpace(Login)
-                                    && !string.IsNullOrWhiteSpace(Password)
-                                    && !string.IsNullOrWhiteSpace(Name)
-                                    && !string.IsNullOrWhiteSpace(Surname)
-                                    && !string.IsNullOrWhiteSpace(Patronymic)
-                                    && !string.IsNullOrWhiteSpace(Mail)
-                                    && !string.IsNullOrWhiteSpace(PhoneNumber);
-           
-    }
-    private bool _isEnabledSendFormRegistration = false;
-    public bool IsEnabledSendFormRegistration 
-    { 
-        get => _isEnabledSendFormRegistration;
-        set
+
+        public string Mail
         {
-            _isEnabledSendFormRegistration = value;
-            OnPropertyChanged();
-        } 
+            get => _mail;
+            set { Set(ref _mail, value); UpdateSendButtonState(); }
+        }
+
+        public string PhoneNumber
+        {
+            get => _phoneNumber;
+            set { Set(ref _phoneNumber, value); UpdateSendButtonState(); }
+        }
+
+        private void UpdateSendButtonState()
+        {
+            IsEnabledSendFormRegistration = !string.IsNullOrWhiteSpace(Login)
+                                        && !string.IsNullOrWhiteSpace(Password)
+                                        && !string.IsNullOrWhiteSpace(Name)
+                                        && !string.IsNullOrWhiteSpace(Surname)
+                                        && !string.IsNullOrWhiteSpace(Mail);
+        }
+
+        private bool _isEnabledSendFormRegistration;
+        public bool IsEnabledSendFormRegistration
+        {
+            get => _isEnabledSendFormRegistration;
+            set { Set(ref _isEnabledSendFormRegistration, value); }
+        }
     }
 }

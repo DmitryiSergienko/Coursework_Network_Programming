@@ -1,0 +1,2259 @@
+using DataLayer.Models;
+using DataLayer.Procedures;
+using Microsoft.Data.SqlClient;
+using Microsoft.EntityFrameworkCore;
+using Model;
+using System.Data;
+
+namespace DataLayer.Services
+{
+    public class Service
+    {
+        public HumansModel? CurrentHuman => _currentHuman;
+        public HumansModel? DeleteHuman
+        {
+            get => _deleteHuman;
+            set => _deleteHuman = value;
+        }
+        private HumansModel? _currentHuman;
+        private HumansModel? _deleteHuman;
+
+        private readonly Models.DataBaseContext _context_Models;
+        private readonly Procedures.DataBaseContext _context_Procedures;
+        private readonly Views.DataBaseContext _context_Views;
+
+        public Service(
+            Models.DataBaseContext contextModels,
+            Procedures.DataBaseContext contextProcedures,
+            Views.DataBaseContext contextViews)
+        {
+            _context_Models = contextModels;
+            _context_Procedures = contextProcedures;
+            _context_Views = contextViews;
+        }
+
+        public async Task<int> AddHumanAsync(HumansModel human)
+        {
+            var humanIdParam = new Procedures.OutputParameter<int?>();
+
+            try
+            {
+                if (human is UsersModel)
+                    await _context_Procedures.Procedures.add_user_return_idAsync(
+                        login: human.Login,
+                        password: human.Password,
+                        name: human.Name,
+                        surname: human.Surname,
+                        patronymic: human.Patronymic,
+                        mail: human.Mail,
+                        phone_number: human.PhoneNumber,
+                        userID: humanIdParam
+                );
+                else if (human is AdminsModel)
+                {
+                    await _context_Procedures.Procedures.add_admin_return_idAsync(
+                        login: human.Login,
+                        password: human.Password,
+                        name: human.Name,
+                        surname: human.Surname,
+                        patronymic: human.Patronymic,
+                        mail: human.Mail,
+                        phone_number: human.PhoneNumber,
+                        adminID: humanIdParam
+                    );
+                }
+            }
+            catch (SqlException ex)
+            {
+                throw MapToUserFriendlyError(ex);
+            }
+            if (humanIdParam.Value <= 0)
+            {
+                throw new Exception("Не удалось получить ID.");
+            }
+            if(humanIdParam.Value == null)
+            {
+                return 0;
+            }
+            return humanIdParam.Value.Value;
+        }
+
+        private static Exception MapToUserFriendlyError(SqlException ex)
+        {
+            return ex.Message switch
+            {
+                string msg when msg.Contains("CHECK", StringComparison.OrdinalIgnoreCase)
+                          && msg.Contains("password", StringComparison.OrdinalIgnoreCase)
+                    => new ArgumentException("Пароль должен быть не менее 8 символов."),
+
+                string msg when msg.Contains("UNIQUE", StringComparison.OrdinalIgnoreCase)
+                          && msg.Contains("login", StringComparison.OrdinalIgnoreCase)
+                    => new ArgumentException("Логин уже занят."),
+
+                string msg when msg.Contains("UNIQUE", StringComparison.OrdinalIgnoreCase)
+                          && msg.Contains("mail", StringComparison.OrdinalIgnoreCase)
+                    => new ArgumentException("Email уже используется."),
+
+                string msg when msg.Contains("NULL", StringComparison.OrdinalIgnoreCase)
+                          && (msg.Contains("login") || msg.Contains("mail"))
+                    => new ArgumentException("Логин и email обязательны."),
+
+                _ => new Exception($"Ошибка при добавлении пользователя: {ex.Message}")
+            };
+        }
+        public async Task<bool> OnLoginAsync(HumansModel human)
+        {
+            if (human == null)
+            {
+                return false;
+            }
+            try
+            {
+                IEnumerable<dynamic>? result = null;
+
+                if (human is AdminsModel)
+                {
+                    result = await _context_Procedures.Procedures.stp_search_admin_for_authAsync(human.Login, human.Password);
+                }                       
+                else if (human is UsersModel)
+                {
+                    result = await _context_Procedures.Procedures.stp_search_user_for_authAsync(human.Login, human.Password);
+                }
+
+                if (result?.Any() == true)
+                {
+                    await GetHumanInfoAsync(human);
+                    return true;
+                }
+                return false;
+            }
+            catch (SqlException ex)
+            {
+                Console.WriteLine("Ошибка базы данных: " + ex.Message);
+                return false;
+            }
+            catch (Exception ex)
+            {
+                // Любая другая ошибка
+                Console.WriteLine("Ошибка: " + ex.Message);
+                return false;
+            }
+        }
+        public async Task<HumansModel?> GetHumanInfoById(int Id, string humanType)
+        {
+            _deleteHuman = null;
+
+            if (humanType == "user")
+            {
+                var result = await _context_Procedures.Procedures.stp_search_user_by_idAsync(Id);
+                var dbUser = result.FirstOrDefault();
+
+                if (dbUser == null)
+                {
+                    return null;
+                }
+
+                _deleteHuman = new UsersModel(
+                    login: dbUser.login,
+                    password: dbUser.password,
+                    name: dbUser.name,
+                    surname: dbUser.surname,
+                    patronymic: dbUser.patronymic,
+                    mail: dbUser.mail,
+                    phone_number: dbUser.phone_number
+                );
+            }
+            else if (humanType == "admin")
+            {
+                var result = await _context_Procedures.Procedures.stp_search_admin_by_idAsync(Id);
+                var dbAdmin = result.FirstOrDefault();
+
+                if (dbAdmin == null)
+                {
+                    return null;
+                }
+
+                _deleteHuman = new AdminsModel(
+                    login: dbAdmin.login,
+                    password: dbAdmin.password,
+                    name: dbAdmin.name,
+                    surname: dbAdmin.surname,
+                    patronymic: dbAdmin.patronymic,
+                    mail: dbAdmin.mail,
+                    phone_number: dbAdmin.phone_number
+                );
+            }
+            return _deleteHuman;
+        }
+        private async Task GetHumanInfoAsync(HumansModel human)
+        {
+            if (human is AdminsModel admin)
+            {
+                var result = await _context_Procedures.Procedures.stp_search_admin_for_infoAsync(human.Login);
+                var dbAdmin = result.FirstOrDefault();
+                if (dbAdmin != null)
+                {
+                    _currentHuman = new AdminsModel(
+                        login: dbAdmin.login,
+                        password: dbAdmin.password,
+                        name: dbAdmin.name,
+                        surname: dbAdmin.surname,
+                        patronymic: dbAdmin.patronymic,
+                        mail: dbAdmin.mail,
+                        phone_number: dbAdmin.phone_number
+                    );
+                }
+            }
+            else if (human is UsersModel user)
+            {
+                var result = await _context_Procedures.Procedures.stp_search_user_for_infoAsync(human.Login);
+                var dbUser = result.FirstOrDefault();
+                if (dbUser != null)
+                {
+                    _currentHuman = new UsersModel(
+                        login: dbUser.login,
+                        password: dbUser.password,
+                        name: dbUser.name,
+                        surname: dbUser.surname,
+                        patronymic: dbUser.patronymic,
+                        mail: dbUser.mail,
+                        phone_number: dbUser.phone_number
+                    );
+                }
+            }
+        }
+        public void LogOut()
+        {
+            _currentHuman = null;
+        }
+        public async Task<DataTable> ExecuteStoredProcedureAsync(string procedureName, params (string Name, object Value)[] parameters)
+        {
+            var dataTable = new DataTable();
+
+            using var connection = _context_Procedures.Database.GetDbConnection();
+
+            // Проверка: если ConnectionString не задан — ошибка
+            if (string.IsNullOrEmpty(connection.ConnectionString))
+            {
+                throw new InvalidOperationException("ConnectionString has not been initialized.");
+            }
+
+            using var command = connection.CreateCommand();
+            command.CommandText = procedureName;
+            command.CommandType = CommandType.StoredProcedure;
+
+            foreach (var (Name, Value) in parameters)
+            {
+                var param = command.CreateParameter();
+                param.ParameterName = Name.StartsWith("@") ? Name : "@" + Name;
+                param.Value = Value ?? DBNull.Value;
+                command.Parameters.Add(param);
+            }
+
+            if (connection.State != ConnectionState.Open)
+                await connection.OpenAsync();
+
+            using var reader = await command.ExecuteReaderAsync();
+            dataTable.Load(reader);
+
+            return dataTable;
+        }
+        private DataTable ConvertToDataTable<T>(IEnumerable<T> data)
+        {
+            var dataTable = new DataTable();
+            var type = typeof(T);
+            var props = type.GetProperties();
+
+            foreach (var prop in props)
+            {
+                var propType = Nullable.GetUnderlyingType(prop.PropertyType) ?? prop.PropertyType;
+                dataTable.Columns.Add(prop.Name, propType);
+            }
+
+            foreach (var item in data)
+            {
+                var row = dataTable.NewRow();
+                foreach (var prop in props)
+                {
+                    var value = prop.GetValue(item);
+                    row[prop.Name] = value ?? DBNull.Value;
+                }
+                dataTable.Rows.Add(row);
+            }
+
+            return dataTable;
+        }
+        public async Task<DataTable> GetViewDataAsync<T>(IQueryable<T> query)
+        {
+            var dataTable = new DataTable();
+
+            var data = await query.ToListAsync();
+
+            if (!data.Any()) return dataTable;
+
+            var type = typeof(T);
+            var props = type.GetProperties();
+
+            foreach (var prop in props)
+            {
+                dataTable.Columns.Add(prop.Name, Nullable.GetUnderlyingType(prop.PropertyType) ?? prop.PropertyType);
+            }
+
+            foreach (var item in data)
+            {
+                var row = dataTable.NewRow();
+                foreach (var prop in props)
+                {
+                    var value = prop.GetValue(item);
+                    row[prop.Name] = value ?? DBNull.Value;
+                }
+                dataTable.Rows.Add(row);
+            }
+
+            return dataTable;
+        }
+        public async Task<DataTable> GetTop3ProductsAsync()
+        {
+            return await ExecuteSqlQueryAsync("SELECT * FROM show_top_3_products");
+        }
+        public async Task<DataTable> GetShowProductsInPortionsAsync(int skipRows, int showRows)
+        {
+            // Вызываем процедуру — она возвращает List<T>
+            var resultList = await _context_Procedures.Procedures.show_products_in_portionsAsync(
+                skip_rows: skipRows,
+                show_rows: showRows
+            );
+
+            // Преобразуем List<T> в DataTable — без асинхронных операций
+            return ConvertToDataTable(resultList);
+        }
+        public async Task<DataTable> GetAllProducts()
+        {
+            // Вызываем процедуру — она возвращает List<T>
+            var resultList = await _context_Procedures.Procedures.show_all_productsAsync();
+
+            // Преобразуем List<T> в DataTable — без асинхронных операций
+            return ConvertToDataTable(resultList);
+        }
+        public async Task<List<show_all_productsResult>> GetListAllProductsAsync()
+        {
+            return await _context_Procedures.Procedures.show_all_productsAsync();
+        }
+        public async Task<DataTable> GetUserOrderHistoryAsync() //Подумать
+        {
+            return await ExecuteSqlQueryAsync("SELECT * FROM show_number_of_users_orders");
+        }
+        public async Task<DataTable> GetUsersWithoutPasswordAsync() //Подумать
+        {
+            return await GetViewDataAsync(_context_Views.show_users_without_passwords);
+        }
+        public async Task AssignImageToAdmin(int adminId, int imageId)
+        {
+            try
+            {
+                // ✅ Синхронные вызовы — чтобы избежать ошибки с IQueryable
+                var admin = _context_Models.adminsSets.FirstOrDefault(a => a.id == adminId);
+                if (admin == null)
+                {
+                    Console.WriteLine($"❌ Админ с ID {adminId} не найден!");
+                    throw new ArgumentException($"Админ с ID {adminId} не найден.");
+                }
+
+                var image = _context_Models.imagesSets.FirstOrDefault(i => i.id == imageId);
+                if (image == null)
+                {
+                    Console.WriteLine($"❌ Картинка с ID {imageId} не найдена!");
+                    throw new ArgumentException($"Картинка с ID {imageId} не найдена.");
+                }
+
+                admin.images_id = imageId;
+                await _context_Models.SaveChangesAsync();
+                Console.WriteLine($"✅ Успешно привязали картинку ID {imageId} к админу ID {adminId}");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ Ошибка при привязке картинки к админу ID {adminId}: {ex.Message}");
+                throw;
+            }
+        }
+        public async Task AssignImageToUser(int userId, int imageId)
+        {
+            try
+            {
+                // ✅ Синхронные вызовы — чтобы избежать ошибки с IQueryable
+                var user = _context_Models.usersSets.FirstOrDefault(u => u.id == userId);
+                if (user == null)
+                {
+                    Console.WriteLine($"❌ Пользователь с ID {userId} не найден!");
+                    throw new ArgumentException($"Пользователь с ID {userId} не найден.");
+                }
+
+                var image = _context_Models.imagesSets.FirstOrDefault(i => i.id == imageId);
+                if (image == null)
+                {
+                    Console.WriteLine($"❌ Картинка с ID {imageId} не найдена!");
+                    throw new ArgumentException($"Картинка с ID {imageId} не найдена.");
+                }
+
+                user.images_id = imageId;
+                await _context_Models.SaveChangesAsync();
+                Console.WriteLine($"✅ Успешно привязали картинку ID {imageId} к пользователю ID {userId}");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ Ошибка при привязке картинки к пользователю ID {userId}: {ex.Message}");
+                throw;
+            }
+        }
+        public async Task AssignImageToProduct(int productId, int imageId)
+        {
+            try
+            {
+                // ✅ Синхронные вызовы — чтобы избежать ошибки с IQueryable
+                var product = _context_Models.productsSets.FirstOrDefault(p => p.id == productId);
+                if (product == null)
+                {
+                    Console.WriteLine($"❌ Продукт с ID {productId} не найден!");
+                    throw new ArgumentException($"Продукт с ID {productId} не найден.");
+                }
+
+                var image = _context_Models.imagesSets.FirstOrDefault(i => i.id == imageId);
+                if (image == null)
+                {
+                    Console.WriteLine($"❌ Картинка с ID {imageId} не найдена!");
+                    throw new ArgumentException($"Картинка с ID {imageId} не найдена.");
+                }
+
+                product.images_id = imageId;
+                await _context_Models.SaveChangesAsync();
+                Console.WriteLine($"✅ Успешно привязали картинку ID {imageId} к продукту ID {productId}");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ Ошибка при привязке картинки к продукту ID {productId}: {ex.Message}");
+                throw;
+            }
+        }
+        public async Task<int> AddImageAsync(string fileName, string filePath)
+        {
+            if (!File.Exists(filePath))
+                throw new FileNotFoundException($"Файл не найден: {filePath}");
+
+            byte[] imageData = await File.ReadAllBytesAsync(filePath);
+
+            var image = new imagesSet
+            {
+                name = fileName,
+                image = imageData
+            };
+
+            _context_Models.imagesSets.Add(image);
+            await _context_Models.SaveChangesAsync();
+
+            return image.id;
+        }
+        public async Task<Dictionary<string, int>> BulkAddImagesFromFolderAsync(string folderPath)
+        {
+            var result = new Dictionary<string, int>();
+
+            if (!Directory.Exists(folderPath))
+                throw new DirectoryNotFoundException($"Папка не найдена: {folderPath}");
+
+            var files = Directory.GetFiles(folderPath, "*.*")
+                .Where(f => f.EndsWith(".jpg") || f.EndsWith(".png") || f.EndsWith(".jpeg"));
+
+            foreach (var filePath in files)
+            {
+                string fileName = Path.GetFileName(filePath);
+                int imageId = await AddImageAsync(fileName, filePath);
+                result[fileName] = imageId;
+            }
+
+            return result;
+        }
+        public async Task AddPicturesToAllTablesAsync()
+        {
+            try
+            {
+                Console.WriteLine("🚀 [AddPicturesToAllTablesAsync] Начинаем выполнение...");
+
+                // 1. Определяем путь к папке Resources
+                string resourcesPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Resources");
+
+                // ✅ ЛОГИРУЕМ ПУТЬ И ПРОВЕРЯЕМ СУЩЕСТВОВАНИЕ ПАПКИ
+                Console.WriteLine($"🔍 Путь к папке с картинками: {resourcesPath}");
+                if (!Directory.Exists(resourcesPath))
+                {
+                    Console.WriteLine($"❌ Папка не найдена: {resourcesPath}");
+                    throw new DirectoryNotFoundException($"Папка с картинками не найдена: {resourcesPath}");
+                }
+
+                // Ищем файлы
+                var files = Directory.GetFiles(resourcesPath, "*.*")
+                    .Where(f => f.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase) ||
+                                f.EndsWith(".png", StringComparison.OrdinalIgnoreCase) ||
+                                f.EndsWith(".jpeg", StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+
+                Console.WriteLine($"📂 Найдено файлов: {files.Count}");
+                foreach (var file in files)
+                {
+                    Console.WriteLine($"📄 {Path.GetFileName(file)}");
+                }
+
+                if (files.Count == 0)
+                {
+                    Console.WriteLine("⚠️ В папке нет подходящих файлов (.jpg, .png, .jpeg)");
+                    return;
+                }
+
+                // 2. Загружаем картинки в БД
+                Console.WriteLine("⏳ Загружаем картинки в imagesSets...");
+                var imageMap = await BulkAddImagesFromFolderAsync(resourcesPath);
+                Console.WriteLine($"✅ Загружено в imagesSet: {imageMap.Count} картинок");
+
+                if (imageMap.Count == 0)
+                {
+                    Console.WriteLine("⚠️ Ни одна картинка не была загружена в БД");
+                    return;
+                }
+
+                // 3. Привязываем к админам
+                Console.WriteLine("👥 Загружаем админов...");
+                var admins = _context_Models.adminsSets.ToList(); // ← Синхронно, чтобы избежать ошибки
+                Console.WriteLine($"✅ Найдено админов: {admins.Count}");
+
+                foreach (var admin in admins)
+                {
+                    var matchedFile = imageMap.Keys
+                        .FirstOrDefault(k => Path.GetFileNameWithoutExtension(k)
+                            .Equals(admin.login, StringComparison.OrdinalIgnoreCase));
+
+                    if (!string.IsNullOrEmpty(matchedFile))
+                    {
+                        int imageId = imageMap[matchedFile];
+                        Console.WriteLine($"✅ Присваиваем картинку '{matchedFile}' админу '{admin.login}' (ID: {admin.id})");
+                        await AssignImageToAdmin(admin.id, imageId);
+                        Console.WriteLine($"✅ Сохранено для админа ID {admin.id}");
+                    }
+                    else
+                    {
+                        Console.WriteLine($"❌ Не найдена картинка для админа: {admin.login}");
+                    }
+                }
+
+                // 4. Привязываем к пользователям
+                Console.WriteLine("👥 Загружаем пользователей...");
+                var users = _context_Models.usersSets.ToList(); // ← Синхронно
+                Console.WriteLine($"✅ Найдено пользователей: {users.Count}");
+
+                foreach (var user in users)
+                {
+                    var matchedFile = imageMap.Keys
+                        .FirstOrDefault(k => Path.GetFileNameWithoutExtension(k)
+                            .Equals(user.login, StringComparison.OrdinalIgnoreCase));
+
+                    if (!string.IsNullOrEmpty(matchedFile))
+                    {
+                        int imageId = imageMap[matchedFile];
+                        Console.WriteLine($"✅ Присваиваем картинку '{matchedFile}' пользователю '{user.login}' (ID: {user.id})");
+                        await AssignImageToUser(user.id, imageId);
+                        Console.WriteLine($"✅ Сохранено для пользователя ID {user.id}");
+                    }
+                    else
+                    {
+                        Console.WriteLine($"❌ Не найдена картинка для пользователя: {user.login}");
+                    }
+                }
+
+                // 5. Привязываем к продуктам
+                Console.WriteLine("📦 Загружаем продукты...");
+                var products = _context_Models.productsSets.ToList(); // ← Синхронно
+                Console.WriteLine($"✅ Найдено продуктов: {products.Count}");
+
+                foreach (var product in products)
+                {
+                    var matchedFile = imageMap.Keys
+                        .FirstOrDefault(k => Path.GetFileNameWithoutExtension(k)
+                            .Equals(product.name, StringComparison.OrdinalIgnoreCase));
+
+                    if (!string.IsNullOrEmpty(matchedFile))
+                    {
+                        int imageId = imageMap[matchedFile];
+                        Console.WriteLine($"✅ Присваиваем картинку '{matchedFile}' продукту '{product.name}' (ID: {product.id})");
+                        await AssignImageToProduct(product.id, imageId);
+                        Console.WriteLine($"✅ Сохранено для продукта ID {product.id}");
+                    }
+                    else
+                    {
+                        Console.WriteLine($"❌ Не найдена картинка для продукта: {product.name}");
+                    }
+                }
+
+                Console.WriteLine("🎉 [AddPicturesToAllTablesAsync] Привязка картинок завершена!");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ ОШИБКА в AddPicturesToAllTablesAsync: {ex.Message}");
+                Console.WriteLine($"📝 Стек: {ex.StackTrace}");
+                throw;
+            }
+        }
+        public async Task<DataTable> ExecuteSqlQueryAsync(string sqlQuery)
+        {
+            var dataTable = new DataTable();
+            using var connection = _context_Procedures.Database.GetDbConnection();
+            using var command = connection.CreateCommand();
+            command.CommandText = sqlQuery;
+            command.CommandType = CommandType.Text;
+            if (connection.State != ConnectionState.Open)
+                await connection.OpenAsync();
+            using var reader = await command.ExecuteReaderAsync();
+            dataTable.Load(reader);
+            return dataTable;
+        }
+    }
+}
+
+namespace DataLayer
+{
+    public static class DataBaseContext_General
+    {
+        public static Models.DataBaseContext base_TZ_21_07_2025Context(this Models.DataBaseContext context) 
+        {
+            return context;
+        }
+        public static Procedures.DataBaseContext base_TZ_21_07_2025Context(this Procedures.DataBaseContext context) 
+        {
+            return context;
+        }
+        public static Views.DataBaseContext base_TZ_21_07_2025Context(this Views.DataBaseContext context)
+        {
+            return context;
+        }
+    }
+}
+
+using System.ComponentModel.DataAnnotations.Schema;
+using static System.Net.Mime.MediaTypeNames;
+
+namespace Model
+{
+    abstract public class HumansModel
+    {
+        public HumansModel(int id, string login, string password, string name, string surname, string patronymic, string mail, string phone_number, DateTime? registration_date, int images_id)
+        {
+            Id = id;
+            Login = login;
+            Password = password;
+            Name = name;
+            Surname = surname;
+            Patronymic = patronymic;
+            Mail = mail;
+            PhoneNumber = phone_number;
+            Registration_date = registration_date;
+            Images_id = images_id;
+        }
+        public HumansModel(string login, string password, string name, string surname, string patronymic, string mail, string phone_number, int images_id)
+        {
+            Login = login;
+            Password = password;
+            Name = name;
+            Surname = surname;
+            Patronymic = patronymic;
+            Mail = mail;
+            PhoneNumber = phone_number;
+            Images_id = images_id;
+        }
+        public HumansModel(string login, string password, string name, string surname, string patronymic, string mail, string phone_number)
+        {
+            Login = login;
+            Password = password;
+            Name = name;
+            Surname = surname;
+            Patronymic = patronymic;
+            Mail = mail;
+            PhoneNumber = phone_number;
+        }
+        public HumansModel(string login, string password)
+        {
+            Login = login;
+            Password = password;
+        }
+        public int Id { get; set; }
+        public string Login { get; set; }
+        public string Password { get; set; }
+        public string Name { get; set; }
+        public string Surname { get; set; }
+        public string Patronymic { get; set; }
+        public string Mail { get; set; }
+        public string PhoneNumber { get; set; }
+        public Nullable<System.DateTime> Registration_date { get; set; }
+        public int? Images_id { get; set; }
+        public virtual ImagesModel Image { get; set; }
+        public override string ToString()
+        {
+            return $"{Id,5} {Login,15} {Name,15} {Surname,15} {Mail,20} {Convert.ToDateTime(Registration_date),20}";
+        }
+    }
+}
+
+using static System.Net.Mime.MediaTypeNames;
+
+namespace Model
+{
+    public class AdminsModel : HumansModel
+    {
+        public AdminsModel(int id, string login, string password, string name, string surname, string patronymic, string mail, string phone_number, DateTime? registration_date, int images_id)
+            : base(id, login, password, name, surname, patronymic, mail, phone_number, registration_date, images_id) { }
+        public AdminsModel(string login, string password, string name, string surname, string patronymic, string mail, string phone_number, int images_id)
+            : base(login, password, name, surname, patronymic, mail, phone_number, images_id) { }
+        public AdminsModel(string login, string password, string name, string surname, string patronymic, string mail, string phone_number)
+            : base(login, password, name, surname, patronymic, mail, phone_number) { }
+        public AdminsModel(string login, string password)
+            : base(login, password) { }
+    }
+}
+
+namespace Model
+{
+    public class ImagesModel
+    {
+        public int Id { get; set; }
+        public required string Name { get; set; }
+        public required byte[] ImageData { get; set; }
+    }
+}
+
+namespace Model
+{
+    public class UsersModel : HumansModel
+    {
+        public UsersModel(int id, string login, string password, string name, string surname, string patronymic, string mail, string phone_number, DateTime? registration_date, int images_id)
+            : base(id, login, password, name, surname, patronymic, mail, phone_number, registration_date, images_id) { }
+        public UsersModel(string login, string password, string name, string surname, string patronymic, string mail, string phone_number, int images_id)
+            : base(login, password, name, surname, patronymic, mail, phone_number, images_id) { }
+        public UsersModel(string login, string password, string name, string surname, string patronymic, string mail, string phone_number)
+            : base(login, password, name, surname, patronymic, mail, phone_number) { }
+        public UsersModel(string login, string password)
+            : base(login, password) { }
+    }
+}
+
+using System.Windows.Input;
+
+namespace ViewModel.Core
+{
+    public class AsyncRelayCommand : ICommand
+    {
+        private readonly Func<Task> _execute;
+        private readonly Func<bool> _canExecute;
+
+        public event EventHandler CanExecuteChanged
+        {
+            add => CommandManager.RequerySuggested += value;
+            remove => CommandManager.RequerySuggested -= value;
+        }
+
+        public AsyncRelayCommand(Func<Task> execute, Func<bool> canExecute = null)
+        {
+            _execute = execute ?? throw new ArgumentNullException(nameof(execute));
+            _canExecute = canExecute;
+        }
+
+        public bool CanExecute(object parameter) => _canExecute?.Invoke() ?? true;
+
+        public async void Execute(object parameter)
+        {
+            if (CanExecute(parameter))
+            {
+                await _execute();
+            }
+        }
+    }
+}
+
+using System.Runtime.CompilerServices;
+
+namespace ViewModel.Core;
+public abstract class BasePageViewModel : ObservableObject
+{
+    protected bool Set<T>(ref T field, T value, [CallerMemberName] string propertyName = null)
+    {
+        if (EqualityComparer<T>.Default.Equals(field, value)) return false;
+        field = value;
+        OnPropertyChanged(propertyName);
+        return true;
+    }
+}
+
+using System.ComponentModel;
+using System.Runtime.CompilerServices;
+
+namespace ViewModel.Core;
+public class ObservableObject : INotifyPropertyChanged
+{
+    public string? Title { get; set; }
+
+    public event PropertyChangedEventHandler? PropertyChanged;
+    public void OnPropertyChanged([CallerMemberName] string prop = "")
+    {
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(prop));
+    }
+}
+
+using System.Windows.Input;
+
+namespace ViewModel.Core;
+
+public class RelayCommand(Action<object?> execute, Func<object?, bool>? canExecute = null) : ICommand
+{
+    public event EventHandler? CanExecuteChanged
+    {
+        add { CommandManager.RequerySuggested += value; }
+        remove { CommandManager.RequerySuggested -= value; }
+    }
+    public bool CanExecute(object? parameter)
+    {
+        return canExecute == null || canExecute(parameter);
+    }
+    public void Execute(object? parameter)
+    {
+        execute(parameter);
+    }
+}
+
+using DataLayer.Services;
+using Model;
+using System.Windows;
+using System.Windows.Input;
+using ViewModel.Core;
+using ViewModel.Services.Interfaces;
+
+namespace ViewModel.ModalWindowsViewModel
+{
+    public class DeleteHumanWindowViewModel : BasePageViewModel, IClosable
+    {
+        public DeleteHumanWindowViewModel() { } // Нужен для дизайнера
+        private Service _deleteHum;
+        public Service DeleteHum
+        {
+            get => _deleteHum;
+            set => _deleteHum = value;
+        }
+        public event Action? RequestClose;
+        public ICommand SearchHuman { get; set; }
+        public ICommand DeleteHuman { get; set; }
+
+        public int Id 
+        {
+            get => _id;
+            set
+            {
+                Set(ref _id, value);
+                UpdateSearchButtonState();
+            }
+        }
+        private int _id;
+        public string? Login => _deleteHum?.DeleteHuman?.Login;
+        public string? Name => _deleteHum?.DeleteHuman?.Name;
+        public string? Surname => _deleteHum?.DeleteHuman?.Surname;
+        public string? Patronymic => _deleteHum?.DeleteHuman?.Patronymic;
+        public string? Email => _deleteHum?.DeleteHuman?.Mail;
+        public string? Phone => _deleteHum?.DeleteHuman?.PhoneNumber;
+
+        private string _humanType;
+        public string HumanType
+        {
+            get => _humanType;
+            set => _humanType = value;
+        }
+
+        public DeleteHumanWindowViewModel(Service humanService) 
+        {
+            _deleteHum = humanService;
+            RequestClose += OnWindowClosed;
+
+            SearchHuman = new RelayCommand(async obj =>
+            {
+                try
+                {
+                    HumansModel human = await humanService.GetHumanInfoById(Id, HumanType);
+                    if (human != null)
+                    {
+                        RefreshHumanProperties();
+                        UpdateDeleteButtonState();
+                    }
+                    else
+                    {
+                        MessageBox.Show("Пользователь не найден");
+                        RefreshHumanProperties();
+                        UpdateDeleteButtonState();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"Ошибка: {ex.Message}");
+                }
+            });
+
+            DeleteHuman = new RelayCommand(async obj =>
+            {
+                MessageBox.Show("Пользователь удалён");
+
+                // ОЧИСТИТЬ ДАННЫЕ ПЕРЕД ОБНОВЛЕНИЕМ UI!
+                if (_deleteHum != null)
+                {
+                    _deleteHum.DeleteHuman = null; // ← ВАЖНО!
+                }
+
+                RefreshHumanProperties(); // ← Теперь UI увидит null и очистит поля
+                RequestClose?.Invoke();
+            });
+        }
+        private void OnWindowClosed()
+        {
+            DeleteHum = null;
+            RefreshHumanProperties();
+        }
+        private void UpdateSearchButtonState()
+        {
+            IsEnabledIdInput = Id > 0;
+        }
+        private bool _isEnabledIdInput = false;
+        public bool IsEnabledIdInput
+        {
+            get => _isEnabledIdInput;
+            set
+            {
+                _isEnabledIdInput = value;
+                OnPropertyChanged();
+            }
+        }
+        private void UpdateDeleteButtonState()
+        {
+            IsEnabledFormDelete = !string.IsNullOrWhiteSpace(Login)
+                                        && !string.IsNullOrWhiteSpace(Name)
+                                        && !string.IsNullOrWhiteSpace(Surname)
+                                        && !string.IsNullOrWhiteSpace(Patronymic)
+                                        && !string.IsNullOrWhiteSpace(Email)
+                                        && !string.IsNullOrWhiteSpace(Phone);
+        }
+        private bool _isEnabledFormDelete = false;
+
+        public bool IsEnabledFormDelete
+        {
+            get => _isEnabledFormDelete;
+            set
+            {
+                _isEnabledFormDelete = value;
+                OnPropertyChanged();
+            }
+        }
+        private void RefreshHumanProperties()
+        {
+            OnPropertyChanged(nameof(Login));
+            OnPropertyChanged(nameof(Name));
+            OnPropertyChanged(nameof(Surname));
+            OnPropertyChanged(nameof(Patronymic));
+            OnPropertyChanged(nameof(Email));
+            OnPropertyChanged(nameof(Phone));
+        }
+        public void ClearData()
+        {
+            if (_deleteHum != null)
+            {
+                _deleteHum.DeleteHuman = null;
+            }
+            Id = 0;
+            RefreshHumanProperties();
+        }
+    }
+}
+
+using DataLayer.Services;
+using Model;
+using System.Windows;
+using System.Windows.Input;
+using ViewModel.Core;
+using ViewModel.Services.Interfaces;
+
+namespace ViewModel.ModalWindowsViewModel
+{
+    public class RegistrationWindowViewModel : BasePageViewModel, IClosable
+    {
+        public RegistrationWindowViewModel() { } // Нужен для дизайнера
+        private readonly Service _humanService;
+        public ICommand SendFormRegistration { get; }
+        public event Action? RequestClose;
+
+        private string _login;
+        private string _password;
+        private string _name;
+        private string _surname;
+        private string _patronymic;
+        private string _mail;
+        private string _phoneNumber;
+        public RegistrationWindowViewModel(Service humanService)
+        {
+            _humanService = humanService;
+
+            SendFormRegistration = new RelayCommand(OnSendForm);
+        }
+
+        private string _humanType;
+        public void GetTypeHuman(string humanType)
+        {
+            _humanType = humanType;
+        }
+        private async void OnSendForm(object? obj)
+        {
+            if (string.IsNullOrWhiteSpace(Login) ||
+                string.IsNullOrWhiteSpace(Password) ||
+                string.IsNullOrWhiteSpace(Name) ||
+                string.IsNullOrWhiteSpace(Surname) ||
+                string.IsNullOrWhiteSpace(Mail))
+            {
+                MessageBox.Show("Заполните обязательные поля.");
+                return;
+            }
+
+            HumansModel human;
+            if (_humanType == "user")
+            {
+                human = new UsersModel
+                (
+                    Login,
+                    Password,
+                    Name,
+                    Surname,
+                    Patronymic,
+                    Mail,
+                    PhoneNumber
+                );
+            }
+            else
+            {
+                human = new AdminsModel
+                (
+                    Login,
+                    Password,
+                    Name,
+                    Surname,
+                    Patronymic,
+                    Mail,
+                    PhoneNumber
+                );
+            }                
+
+            try
+            {
+                int newId = await _humanService.AddHumanAsync(human);
+
+                if (newId > 0)
+                {
+                    MessageBox.Show($"Регистрация успешна! ID: {newId}");
+                    RequestClose?.Invoke();
+                }
+                else
+                {
+                    MessageBox.Show("Ошибка при добавлении.");
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Ошибка: " + ex.Message);
+            }
+        }
+
+        public string Login
+        {
+            get => _login;
+            set
+            {
+                Set(ref _login, value);
+                UpdateSendButtonState();
+            }
+        }
+        public string Password
+        {
+            get => _password;
+            set
+            {
+                Set(ref _password, value);
+                UpdateSendButtonState();
+            }
+        }
+        public string Name
+        {
+            get => _name;
+            set
+            {
+                Set(ref _name, value);
+                UpdateSendButtonState();
+            }
+        }
+        public string Surname
+        {
+            get => _surname;
+            set
+            {
+                Set(ref _surname, value);
+                UpdateSendButtonState();
+            }
+        }
+        public string Patronymic
+        {
+            get => _patronymic;
+            set
+            {
+                Set(ref _patronymic, value);
+                UpdateSendButtonState();
+            }
+        }
+        public string Mail
+        {
+            get => _mail;
+            set
+            {
+                Set(ref _mail, value);
+                UpdateSendButtonState();
+            }
+        }
+        public string PhoneNumber
+        {
+            get => _phoneNumber;
+            set
+            {
+                Set(ref _phoneNumber, value);
+                UpdateSendButtonState();
+            }
+        }
+        private void UpdateSendButtonState()
+        {
+            IsEnabledSendFormRegistration = !string.IsNullOrWhiteSpace(Login)
+                                        && !string.IsNullOrWhiteSpace(Password)
+                                        && !string.IsNullOrWhiteSpace(Name)
+                                        && !string.IsNullOrWhiteSpace(Surname)
+                                        && !string.IsNullOrWhiteSpace(Patronymic)
+                                        && !string.IsNullOrWhiteSpace(Mail)
+                                        && !string.IsNullOrWhiteSpace(PhoneNumber);
+
+        }
+        private bool _isEnabledSendFormRegistration = false;
+
+        public bool IsEnabledSendFormRegistration
+        {
+            get => _isEnabledSendFormRegistration;
+            set
+            {
+                _isEnabledSendFormRegistration = value;
+                OnPropertyChanged();
+            }
+        }
+    }
+}
+
+using DataLayer.Services;
+using Microsoft.Data.SqlClient;
+using System.Data;
+using System.IO;
+using System.Windows.Input;
+using System.Windows.Media.Imaging;
+using ViewModel.Core;
+using ViewModel.ModalWindowsViewModel;
+using ViewModel.Services.Interfaces;
+
+namespace ViewModel.PagesViewModel;
+public class AdminPageViewModel : BasePageViewModel
+{
+    public AdminPageViewModel() { } // Нужен для дизайнера
+
+    private readonly INavigateService _navigateService;
+    private readonly Service _service;
+    private readonly IDialogService _iDialogService;
+    private readonly DataLayer.Models.DataBaseContext _dbContext;
+    public string? LoginAdmin => _service.CurrentHuman?.Login;
+    public string? NameAdmin => _service.CurrentHuman?.Name;
+    public string? SurnameAdmin => _service.CurrentHuman?.Surname;
+    public string? EmailAdmin => _service.CurrentHuman?.Mail;
+    public string? PhoneAdmin => _service.CurrentHuman?.PhoneNumber;
+    public ICommand LogOut { get; }
+    public ICommand AddUser { get; }
+    public ICommand UpdateUser { get; }
+    public ICommand DeleteUser { get; }
+    public ICommand AddAdmin { get; }
+    public ICommand UpdateAdmin { get; }
+    public ICommand DeleteAdmin { get; }
+    public ICommand AddProduct { get; }
+    public ICommand UpdateProduct { get; }
+    public ICommand DeleteProduct { get; }
+    public ICommand AddCategory { get; }
+    public ICommand UpdateCategory { get; }
+    public ICommand DeleteCategory { get; }
+    public ICommand AddQuantityProduct { get; }
+
+    private string _inputArea;
+    public string InputArea
+    {
+        get => _inputArea;
+        set
+        {
+            _inputArea = value;
+            OnPropertyChanged();
+        }
+    }
+    private DataTable _dataTableAdmin;
+    public DataTable DataTableAdmin
+    {
+        get => _dataTableAdmin;
+        set
+        {
+            _dataTableAdmin = value;
+            OnPropertyChanged();
+        }
+    }
+    public ICommand ExecuteQueryCommand { get; }
+    public AdminPageViewModel(INavigateService navigateService, IDialogService iDialogService, Service service, DataLayer.Models.DataBaseContext dbContext)
+    {
+        _navigateService = navigateService;
+        _iDialogService = iDialogService;
+        _service = service;
+        _dbContext = dbContext;
+
+        LogOut = new RelayCommand(obj =>
+        {
+            service.LogOut();
+            navigateService.NavigateTo<LoginPageViewModel>();
+        });
+
+        ExecuteQueryCommand = new RelayCommand(ExecuteQuery);
+        DataTableAdmin = new DataTable();
+
+        AddUser = new RelayCommand(async obj =>
+        {
+            var vm = new RegistrationWindowViewModel(_service);
+            vm.GetTypeHuman("user");                            
+            _iDialogService.ShowModal(vm);                      
+        });
+        UpdateUser = new RelayCommand(async obj => { });
+        DeleteUser = new RelayCommand(async obj => 
+        {
+            var vm = new DeleteHumanWindowViewModel(_service);
+            vm.HumanType = "user";
+            _iDialogService.ShowModal(vm);
+        });
+        AddAdmin = new RelayCommand(async obj =>
+        {
+            var vm = new RegistrationWindowViewModel(_service);
+            vm.GetTypeHuman("admin");
+            _iDialogService.ShowModal(vm);
+        });
+        UpdateAdmin = new RelayCommand(async obj => { });
+        DeleteAdmin = new RelayCommand(async obj => 
+        {
+            var vm = new DeleteHumanWindowViewModel(_service);
+            vm.HumanType = "admin";
+            _iDialogService.ShowModal(vm);
+        });
+        AddProduct = new RelayCommand(async obj => { });
+        UpdateProduct = new RelayCommand(async obj => { });
+        DeleteProduct = new RelayCommand(async obj => { });
+        AddCategory = new RelayCommand(async obj => { });
+        UpdateCategory = new RelayCommand(async obj => { });
+        DeleteCategory = new RelayCommand(async obj => { });
+        AddQuantityProduct = new RelayCommand(async obj => { });
+    }
+    private async void ExecuteQuery(object parameter)
+    {
+        try
+        {
+            string connectionString = "Server=(localdb)\\MSSQLLocalDB;Database=Examen_ModelFirst;User Id=user1;Password=sa;TrustServerCertificate=True;";
+            using (var connection = new SqlConnection(connectionString))
+            {
+                connection.Open();
+                using (var command = new SqlCommand(InputArea, connection))
+                using (var adapter = new SqlDataAdapter(command))
+                {
+                    var resultTable = new DataTable();
+                    adapter.Fill(resultTable);
+
+                    // Проверяем, есть ли в таблице столбец "images_id"
+                    if (resultTable.Columns.Contains("images_id"))
+                    {
+                        // Добавляем новый столбец для хранения данных изображения
+                        resultTable.Columns.Add("Image", typeof(byte[]));
+
+                        // Проходим по каждой строке и заполняем столбец "Image"
+                        foreach (DataRow row in resultTable.Rows)
+                        {
+                            if (row["images_id"] != DBNull.Value && int.TryParse(row["images_id"].ToString(), out int imageId))
+                            {
+                                // Используем _dbContext для поиска изображения
+                                var imageEntity = await _dbContext.imagesSets.FindAsync(imageId);
+                                row["Image"] = imageEntity?.image; // Присваиваем массив байт или null
+                            }
+                        }
+
+                        // Удаляем старый столбец "images_id", чтобы он не отображался
+                        resultTable.Columns.Remove("images_id");
+                    }
+
+                    DataTableAdmin = resultTable;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            var errorTable = new DataTable();
+            errorTable.Columns.Add("Ошибка", typeof(string));
+            errorTable.Rows.Add(ex.Message);
+            DataTableAdmin = errorTable;
+        }
+    }
+
+    private byte[] _imageData;
+    public byte[] ImageData
+    {
+        get => _imageData;
+        set
+        {
+            if (Set(ref _imageData, value))
+            {
+                OnPropertyChanged(nameof(Image));
+            }
+        }
+    }
+    public BitmapImage Image
+    {
+        get
+        {
+            if (_imageData == null || _imageData.Length == 0)
+                return null;
+
+            try
+            {
+                var image = new BitmapImage();
+                using (var stream = new MemoryStream(_imageData))
+                {
+                    image.BeginInit();
+                    image.StreamSource = stream;
+                    image.CacheOption = BitmapCacheOption.OnLoad;
+                    image.EndInit();
+                    image.Freeze();
+                }
+                return image;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+    }
+}
+
+using DataLayer.Services;
+using Model;
+using System.Windows;
+using System.Windows.Input;
+using ViewModel.Core;
+using ViewModel.Services.Interfaces;
+
+namespace ViewModel.PagesViewModel;
+public class LoginPageViewModel : BasePageViewModel
+{
+    public LoginPageViewModel() { } // Нужен для дизайнера
+    private readonly INavigateService _navigateService;
+    private readonly Service _userService;
+    public ICommand NavigateToSignIn { get; }
+    public ICommand NavigateToRegistration { get; }
+    public LoginPageViewModel(INavigateService navigateService, Service userService)
+    {
+        _navigateService = navigateService;
+        _userService = userService;
+
+        NavigateToSignIn = new RelayCommand(OnLoginAsync);
+        NavigateToRegistration = new RelayCommand(obj => navigateService.NavigateTo<RegistrationPageViewModel>());
+    }
+    private string _login;
+    private string _password;
+    public string Login
+    {
+        get => _login;
+        set
+        {
+            Set(ref _login, value);
+            UpdateSignInButtonState();
+        }
+    }
+    public string Password
+    {
+        get => _password;
+        set
+        {
+            Set(ref _password, value);
+            UpdateSignInButtonState();
+        }
+    }
+    private void UpdateSignInButtonState()
+    {
+        IsEnabledNavigateToSignIn = !string.IsNullOrWhiteSpace(Login)
+                                && !string.IsNullOrWhiteSpace(Password);
+    }
+    private async void OnLoginAsync(object? obj)
+    {
+        if (string.IsNullOrWhiteSpace(Login) ||
+            string.IsNullOrWhiteSpace(Password))
+        {
+            MessageBox.Show("Заполните обязательные поля.");
+            return;
+        }
+
+        HumansModel user = new UsersModel(Login, Password);
+        HumansModel admin = new AdminsModel(Login, Password);
+
+        try
+        {
+            if (await _userService.OnLoginAsync(user))
+            {
+                _navigateService.NavigateTo<UserPageViewModel>();
+            }
+            else if(await _userService.OnLoginAsync(admin))
+            {
+                _navigateService.NavigateTo<AdminPageViewModel>();
+            }
+            else
+            {
+                MessageBox.Show("Ошибка при авторизации.");
+            }
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show("Ошибка: " + ex.Message);
+        }
+    }
+    
+    private bool _isEnabledNavigateToSignIn = false;
+    public bool IsEnabledNavigateToSignIn
+    {
+        get => _isEnabledNavigateToSignIn;
+        set
+        {
+            _isEnabledNavigateToSignIn = value;
+            OnPropertyChanged();
+        }
+    }
+}
+
+using DataLayer.Services;
+using Model;
+using System.Windows;
+using System.Windows.Input;
+using ViewModel.Core;
+using ViewModel.Services.Interfaces;
+
+namespace ViewModel.PagesViewModel;
+public class RegistrationPageViewModel : BasePageViewModel
+{
+    public RegistrationPageViewModel() { } // Нужен для дизайнера
+    private readonly INavigateService _navigateService;
+    private readonly Service _userService;
+    public ICommand BackToLoginPage { get; }
+    public ICommand SendFormRegistration { get; }
+
+    private string _login;
+    private string _password;
+    private string _name;
+    private string _surname;
+    private string _patronymic;
+    private string _mail;
+    private string _phoneNumber;
+    public RegistrationPageViewModel(INavigateService navigateService, Service userService)
+    {
+        _navigateService = navigateService;
+        _userService = userService;
+
+        BackToLoginPage = new RelayCommand(obj => navigateService.NavigateTo<LoginPageViewModel>());
+        SendFormRegistration = new RelayCommand(OnSendForm);
+    }
+    private async void OnSendForm(object? obj)
+    {
+        if (string.IsNullOrWhiteSpace(Login) ||
+            string.IsNullOrWhiteSpace(Password) ||
+            string.IsNullOrWhiteSpace(Name) ||
+            string.IsNullOrWhiteSpace(Surname) ||
+            string.IsNullOrWhiteSpace(Mail))
+        {
+            MessageBox.Show("Заполните обязательные поля.");
+            return;
+        }
+
+        var user = new UsersModel
+        (
+            Login,
+            Password,
+            Name,
+            Surname,
+            Patronymic,
+            Mail,
+            PhoneNumber
+        );
+
+        try
+        {
+            int newId = await _userService.AddHumanAsync(user);
+
+            if (newId > 0)
+            {
+                MessageBox.Show($"Регистрация успешна! ID: {newId}");
+                _navigateService.NavigateTo<LoginPageViewModel>();
+            }
+            else
+            {
+                MessageBox.Show("Ошибка при добавлении пользователя.");
+            }
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show("Ошибка: " + ex.Message);
+        }
+    }
+
+    public string Login
+    {
+        get => _login;
+        set
+        {
+            Set(ref _login, value);
+            UpdateSendButtonState();
+        } 
+    }
+    public string Password
+    {
+        get => _password;
+        set
+        {
+            Set(ref _password, value);
+            UpdateSendButtonState();
+        }
+    }
+    public string Name
+    {
+        get => _name;
+        set
+        {
+            Set(ref _name, value);
+            UpdateSendButtonState();
+        }
+    }
+    public string Surname
+    {
+        get => _surname;
+        set
+        {
+            Set(ref _surname, value);
+            UpdateSendButtonState();
+        }
+    }
+    public string Patronymic
+    {
+        get => _patronymic;
+        set
+        {
+            Set(ref _patronymic, value);
+            UpdateSendButtonState();
+        }
+    }
+    public string Mail
+    {
+        get => _mail;
+        set
+        {
+            Set(ref _mail, value);
+            UpdateSendButtonState();
+        }
+    }
+    public string PhoneNumber
+    {
+        get => _phoneNumber;
+        set
+        {
+            Set(ref _phoneNumber, value);
+            UpdateSendButtonState();
+        }
+    }
+    private void UpdateSendButtonState()
+    {
+        IsEnabledSendFormRegistration = !string.IsNullOrWhiteSpace(Login)
+                                    && !string.IsNullOrWhiteSpace(Password)
+                                    && !string.IsNullOrWhiteSpace(Name)
+                                    && !string.IsNullOrWhiteSpace(Surname)
+                                    && !string.IsNullOrWhiteSpace(Patronymic)
+                                    && !string.IsNullOrWhiteSpace(Mail)
+                                    && !string.IsNullOrWhiteSpace(PhoneNumber);
+           
+    }
+    private bool _isEnabledSendFormRegistration = false;
+    public bool IsEnabledSendFormRegistration 
+    { 
+        get => _isEnabledSendFormRegistration;
+        set
+        {
+            _isEnabledSendFormRegistration = value;
+            OnPropertyChanged();
+        } 
+    }
+}
+
+using DataLayer.Services;
+using System.Data;
+using System.IO;
+using System.Windows;
+using System.Windows.Input;
+using System.Windows.Media.Imaging;
+using ViewModel.Core;
+using ViewModel.Services.Interfaces;
+
+namespace ViewModel.PagesViewModel;
+public class UserPageViewModel : BasePageViewModel
+{
+    public UserPageViewModel() { } // Нужен для дизайнера
+    private readonly INavigateService _navigateService;
+    private readonly Service _service;
+    private readonly DataLayer.Models.DataBaseContext _dbContext;
+    public string? LoginUser => _service.CurrentHuman?.Login;
+    public string? NameUser => _service.CurrentHuman?.Name;
+    public string? SurnameUser => _service.CurrentHuman?.Surname;
+    public string? EmailUser => _service.CurrentHuman?.Mail;
+    public string? PhoneUser => _service.CurrentHuman?.PhoneNumber;
+    public ICommand LogOut { get; }
+    public ICommand ShowTop3Products { get; }
+    public ICommand SearchProductByName { get; }
+    public ICommand SearchProductByPrice { get; }
+    public ICommand ShowProductInCategory { get; }
+    public ICommand ShowProductInPortions { get; }
+    public ICommand SearchOrdersByDate { get; }
+    public ICommand ShowUserOrderHistory { get; }
+    public ICommand CreateOrder { get; }
+    public ICommand ShowAllProducts { get; }
+
+    private int _skipRows = 0;
+    private int _countPortions;
+    public int CountPortions 
+    { 
+        get => _countPortions;
+        set
+        {
+            Set(ref _countPortions, value);
+            UpdateCountPortionsButtonState();
+        }
+    }
+    public ICommand EnterCountPortions { get; }
+    public ICommand LeftArrowCountPortions { get; }
+    public ICommand RightArrowCountPortions { get; }
+
+    private DataTable _data;
+    public DataTable Data
+    {
+        get => _data;
+        set
+        {
+            _data = value;
+            OnPropertyChanged();
+        }
+    }
+    public UserPageViewModel(INavigateService navigateService, Service service, DataLayer.Models.DataBaseContext dbContext)
+    {
+        _navigateService = navigateService;
+        _service = service;
+        _dbContext = dbContext;
+
+        LogOut = new RelayCommand(obj =>
+        {
+            IsPortionsFormVisible = Visibility.Collapsed;
+            service.LogOut();
+            navigateService.NavigateTo<LoginPageViewModel>();
+        });
+        ShowTop3Products = new AsyncRelayCommand(async () =>
+        {
+            try
+            {
+                IsPortionsFormVisible = Visibility.Collapsed;
+                var result = await _service.GetTop3ProductsAsync();
+                Data = await AddImageColumnAsync(result);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Ошибка: " + ex.Message);
+            }
+        });
+        SearchProductByName = new RelayCommand(async obj => 
+        {
+            IsPortionsFormVisible = Visibility.Collapsed;
+        });
+        SearchProductByPrice = new RelayCommand(async obj => 
+        {
+            IsPortionsFormVisible = Visibility.Collapsed;
+        });
+        ShowProductInCategory = new RelayCommand(async obj => 
+        {
+            IsPortionsFormVisible = Visibility.Collapsed;
+        });
+        ShowProductInPortions = new RelayCommand(async obj => 
+        {
+            try
+            {
+                IsPortionsFormVisible = Visibility.Visible;
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Ошибка: " + ex.Message);
+            }
+        });
+        EnterCountPortions = new AsyncRelayCommand(async () =>
+        {
+            try
+            {
+                var result = await _service.GetShowProductsInPortionsAsync(_skipRows, CountPortions);
+                Data = await AddImageColumnAsync(result);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Ошибка: " + ex.Message);
+            }
+        });
+        LeftArrowCountPortions = new AsyncRelayCommand(async () =>
+        {
+            try
+            {
+                if (_skipRows > 0)
+                {
+                    _skipRows -= CountPortions;
+                    if (_skipRows < 0) _skipRows = 0;
+                }
+                var result = await _service.GetShowProductsInPortionsAsync(_skipRows, CountPortions);
+                Data = await AddImageColumnAsync(result);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Ошибка: " + ex.Message);
+            }
+        });
+        RightArrowCountPortions = new AsyncRelayCommand(async () =>
+        {
+            try
+            {
+                var products = await _service.GetListAllProductsAsync();
+                var totalCount = products.Count;
+                var maxSkipRows = (totalCount / CountPortions) * CountPortions;
+                if (_skipRows + CountPortions < totalCount)
+                {
+                    _skipRows += CountPortions;
+                    var result = await _service.GetShowProductsInPortionsAsync(_skipRows, CountPortions);
+                    Data = await AddImageColumnAsync(result);
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Ошибка: " + ex.Message);
+            }
+        });
+        SearchOrdersByDate = new RelayCommand(async obj => 
+        {
+            IsPortionsFormVisible = Visibility.Collapsed;
+        });
+        ShowUserOrderHistory = new AsyncRelayCommand(async () =>
+        {
+            try
+            {
+                IsPortionsFormVisible = Visibility.Collapsed;
+                var result = await _service.GetUserOrderHistoryAsync();
+                Data = await AddImageColumnAsync(result);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Ошибка: " + ex.Message);
+            }
+        });
+        CreateOrder = new RelayCommand(async obj => 
+        {
+            IsPortionsFormVisible = Visibility.Collapsed;
+        });
+        ShowAllProducts = new RelayCommand(async obj => 
+        {
+            IsPortionsFormVisible = Visibility.Collapsed;
+        });
+    }
+
+    private Visibility _isPortionsFormVisible = Visibility.Collapsed;
+    public Visibility IsPortionsFormVisible
+    {
+        get => _isPortionsFormVisible;
+        set
+        {
+            _isPortionsFormVisible = value;
+            OnPropertyChanged();
+        }
+    }
+
+    private bool _enterCountPortionsIsEnabled = false;
+    public bool EnterCountPortionsIsEnabled
+    {
+        get => _enterCountPortionsIsEnabled;
+        set
+        {
+            _enterCountPortionsIsEnabled = value;
+            OnPropertyChanged();
+        }
+    }
+    private void UpdateCountPortionsButtonState()
+    {
+        EnterCountPortionsIsEnabled = CountPortions > 0;
+    }
+
+    private byte[] _imageData;
+    public byte[] ImageData
+    {
+        get => _imageData;
+        set
+        {
+            if (Set(ref _imageData, value))
+            {
+                OnPropertyChanged(nameof(Image));
+            }
+        }
+    }
+    public BitmapImage Image
+    {
+        get
+        {
+            if (_imageData == null || _imageData.Length == 0)
+                return null;
+
+            try
+            {
+                var image = new BitmapImage();
+                using (var stream = new MemoryStream(_imageData))
+                {
+                    image.BeginInit();
+                    image.StreamSource = stream;
+                    image.CacheOption = BitmapCacheOption.OnLoad;
+                    image.EndInit();
+                    image.Freeze();
+                }
+                return image;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+    }
+    private async Task<DataTable> AddImageColumnAsync(DataTable table)
+    {
+        // Проверяем, есть ли в таблице столбец "images_id"
+        if (!table.Columns.Contains("images_id"))
+        {
+            // Если столбца нет — просто возвращаем исходную таблицу. НИЧЕГО НЕ ЛОМАЕМ.
+            return table;
+        }
+
+        try
+        {
+            // Добавляем новый столбец для хранения данных изображения
+            table.Columns.Add("Image", typeof(byte[]));
+
+            // Проходим по каждой строке и заполняем столбец "Image"
+            foreach (DataRow row in table.Rows)
+            {
+                if (row["images_id"] != DBNull.Value && int.TryParse(row["images_id"].ToString(), out int imageId))
+                {
+                    var imageEntity = await _dbContext.imagesSets.FindAsync(imageId);
+                    row["Image"] = imageEntity?.image; // Присваиваем массив байт или null
+                }
+                else
+                {
+                    // Если images_id null или не число — оставляем Image как null
+                    row["Image"] = DBNull.Value;
+                }
+            }
+
+            // Удаляем старый столбец "images_id", чтобы он не отображался
+            table.Columns.Remove("images_id");
+        }
+        catch (Exception ex)
+        {
+            // Логируем ошибку, но НЕ ПРОПУСКАЕМ исключение!
+            Console.WriteLine($"⚠️ Ошибка при добавлении столбца Image: {ex.Message}");
+            // Если что-то пошло не так, возвращаем исходную таблицу без изменений
+            return table;
+        }
+
+        return table;
+    }
+}
+
+using Microsoft.Extensions.DependencyInjection;
+using System.Windows.Controls;
+using ViewModel.Core;
+using ViewModel.ModalWindowsViewModel;
+using ViewModel.PagesViewModel;
+using ViewModel.Services.Interfaces;
+
+namespace ViewModel.Services.Classes;
+
+public class NavigateService : INavigateService
+{
+    private readonly IServiceProvider _provider;
+    private Frame _frame;
+
+    public NavigateService(IServiceProvider provider)
+    {
+        _provider = provider;
+    }
+
+    public event Action<string>? Navigated;
+
+    public void ConfigureNavigation(Frame mainFrame)
+    {
+        _frame = mainFrame;
+    }
+
+    public void NavigateTo<T>() where T : BasePageViewModel
+    {
+        var viewModel = _provider.GetRequiredService<T>();
+
+        string pageName = viewModel switch
+        {
+            LoginPageViewModel => "LoginPageView",
+            RegistrationPageViewModel => "RegistrationPageView",
+            AdminPageViewModel => "AdminPageView",
+            UserPageViewModel => "UserPageView",
+            RegistrationWindowViewModel => "RegistrationWindowViewModel",
+            _ => throw new ArgumentException($"Неизвестная ViewModel: {typeof(T).Name}")
+        };
+
+        Navigated?.Invoke(pageName);
+    }
+}
+
+namespace ViewModel.Services.Interfaces
+{
+    public interface IClosable
+    {
+        event Action? RequestClose;
+    }
+}
+
+public interface IDialogService
+{
+    void ShowModal(object viewModel);
+}
+
+using System.Windows.Controls;
+using ViewModel.Core;
+
+namespace ViewModel.Services.Interfaces;
+
+public interface INavigateService
+{
+    void NavigateTo<T>() where T : BasePageViewModel;
+    void ConfigureNavigation(Frame mainFrame);
+    event Action<string> Navigated;
+}
+
+version: '3.4'
+
+services:
+  server:
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:8080;https://+:8081
+    ports:
+      - "8080:8080"
+      - "8081:8081"
+
+version: '3.4'
+
+services:
+  server:
+    image: server
+    build:
+      context: .
+      dockerfile: Server/Dockerfile
+
+using DataLayer.Services;
+using Microsoft.AspNetCore.Mvc;
+using Model;
+using Server.Dtos;
+
+namespace Server.Controllers
+{
+    // Это базовый атрибут для всех контроллеров Web API
+    [ApiController]
+    // Это путь: "api/auth" — по этому адресу будет доступен контроллер
+    [Route("api/[controller]")]
+    public class authController : ControllerBase
+    {
+        private readonly Service _service;
+
+        // Конструктор — сюда ASP.NET автоматически передаст твой Service
+        public authController(Service service)
+        {
+            _service = service;
+        }
+
+        // Это метод API для входа
+        // Когда клиент вызовет POST запрос на "api/auth/login" — сработает этот метод
+        [HttpPost("login")]
+        public async Task<IActionResult> Login([FromBody] LoginRequest request)
+        {
+            if (string.IsNullOrWhiteSpace(request.Login) || string.IsNullOrWhiteSpace(request.Password))
+            {
+                return BadRequest(new { error = "Логин и пароль обязательны" });
+            }
+            try
+            {
+                // 1. Создаём модели для проверки
+                var user = new UsersModel(request.Login, request.Password);
+                var admin = new AdminsModel(request.Login, request.Password);
+
+                // 2. Проверяем авторизацию
+                if (await _service.OnLoginAsync(user))
+                {
+                    if (_service.CurrentHuman == null)
+                        return Unauthorized(new { error = "Ошибка авторизации" });
+
+                    // 3. Формируем БЕЗОПАСНЫЙ ответ без пароля
+                    var response = new LoginResponse
+                    {
+                        Id = _service.CurrentHuman.Id,
+                        Login = _service.CurrentHuman.Login,
+                        Name = _service.CurrentHuman.Name,
+                        Surname = _service.CurrentHuman.Surname,
+                        Type = "user"
+                    };
+                    return Ok(response);
+                }
+                else if (await _service.OnLoginAsync(admin))
+                {
+                    if (_service.CurrentHuman == null)
+                        return Unauthorized(new { error = "Ошибка авторизации" });
+
+                    var response = new LoginResponse
+                    {
+                        Id = _service.CurrentHuman.Id,
+                        Login = _service.CurrentHuman.Login,
+                        Name = _service.CurrentHuman.Name,
+                        Surname = _service.CurrentHuman.Surname,
+                        Type = "admin"
+                    };
+                    return Ok(response);
+                }
+
+                return Unauthorized(new { error = "Неверный логин или пароль" });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { error = ex.Message });
+            }
+        }
+
+        // POST api/auth/logout
+        [HttpPost("logout")]
+        public IActionResult Logout()
+        {
+            _service.LogOut();
+            return Ok(new { message = "Выход выполнен" });
+        }
+    }
+
+    // Модель данных для запроса входа
+    public class LoginRequest
+    {
+        public string Login { get; set; } = string.Empty;
+        public string Password { get; set; } = string.Empty;
+    }
+}
+
+using Microsoft.AspNetCore.Mvc;
+using DataLayer.Services;
+
+namespace Server.Controllers
+{
+    [ApiController]
+    [Route("api/[controller]")]
+    public class productsController : ControllerBase
+    {
+        private readonly Service _service;
+
+        public productsController(Service service)
+        {
+            _service = service;
+        }
+
+        // GET api/products/top3
+        [HttpGet("top3")]
+        public async Task<IActionResult> GetTop3Products()
+        {
+            try
+            {
+                var result = await _service.GetTop3ProductsAsync();
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { error = ex.Message });
+            }
+        }
+
+        // GET api/products/portion
+        [HttpGet("portion")]
+        public async Task<IActionResult> GetProductsInPortions(
+            [FromQuery] int skipRows = 0,
+            [FromQuery] int showRows = 10)
+        { 
+            try
+            {
+                var result = await _service.GetShowProductsInPortionsAsync(skipRows, showRows);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { error = ex.Message });
+            }
+        }
+    }
+}
+
+namespace Server.Dtos
+{
+    public class LoginRequest
+    {
+        public string Login { get; set; } = string.Empty;
+        public string Password { get; set; } = string.Empty;
+    }
+}
+
+namespace Server.Dtos
+{
+    public class LoginResponse
+    {
+        public int Id { get; set; }
+        public string Login { get; set; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
+        public string Surname { get; set; } = string.Empty;
+        public string Type { get; set; } = "user"; // "user" или "admin"
+    }
+}
+
+namespace Server.DTOs
+{
+    public class RegisterRequest
+    {
+    }
+}
+
+
+namespace Server.Dtos
+{
+    public class UserDto
+    {
+        public int Id { get; set; }
+        public string Login { get; set; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
+        public string Surname { get; set; } = string.Empty;
+        public string Patronymic { get; set; } = string.Empty;
+        public string Mail { get; set; } = string.Empty;
+        public string PhoneNumber { get; set; } = string.Empty;
+        public DateTime? RegistrationDate { get; set; }
+    }
+}
+
+# См. статью по ссылке https://aka.ms/customizecontainer, чтобы узнать как настроить контейнер отладки и как Visual Studio использует этот Dockerfile для создания образов для ускорения отладки.
+
+# Этот этап используется при запуске из VS в быстром режиме (по умолчанию для конфигурации отладки)
+FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS base
+USER $APP_UID
+WORKDIR /app
+EXPOSE 8080
+EXPOSE 8081
+
+
+# Этот этап используется для сборки проекта службы
+FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
+ARG BUILD_CONFIGURATION=Release
+WORKDIR /src
+COPY ["Examen/Server/Server.csproj", "Examen/Server/"]
+RUN dotnet restore "./Examen/Server/Server.csproj"
+COPY . .
+WORKDIR "/src/Examen/Server"
+RUN dotnet build "./Server.csproj" -c $BUILD_CONFIGURATION -o /app/build
+
+# Этот этап используется для публикации проекта службы, который будет скопирован на последний этап
+FROM build AS publish
+ARG BUILD_CONFIGURATION=Release
+RUN dotnet publish "./Server.csproj" -c $BUILD_CONFIGURATION -o /app/publish /p:UseAppHost=false
+
+# Этот этап используется в рабочей среде или при запуске из VS в обычном режиме (по умолчанию, когда конфигурация отладки не используется)
+FROM base AS final
+WORKDIR /app
+COPY --from=publish /app/publish .
+ENTRYPOINT ["dotnet", "Server.dll"]
+
+using DataLayer.Services;
+using Microsoft.EntityFrameworkCore;
+
+var builder = WebApplication.CreateBuilder(args);
+
+// Добавляем сервисы в контейнер DI (Регистрация DbContext)
+builder.Services.AddDbContext<DataLayer.Models.DataBaseContext>(options =>
+    options.UseSqlServer(builder.Configuration.GetConnectionString("ModelsConnection")));
+
+builder.Services.AddDbContext<DataLayer.Procedures.DataBaseContext>(options =>
+    options.UseSqlServer(builder.Configuration.GetConnectionString("ProceduresConnection")));
+
+builder.Services.AddDbContext<DataLayer.Views.DataBaseContext>(options =>
+    options.UseSqlServer(builder.Configuration.GetConnectionString("ViewsConnection")));
+
+// Регистрируем сервис
+builder.Services.AddScoped<Service>();
+
+// Добавляем контроллеры (API)
+builder.Services.AddControllers();
+
+// Добавляем Swagger
+builder.Services.AddSwaggerGen(c =>
+{
+    c.SwaggerDoc("v1", new Microsoft.OpenApi.Models.OpenApiInfo
+    {
+        Title = "Examen API",
+        Version = "v1"
+    });
+});
+
+// CORS - чтобы WPF клиент мог обращаться к серверу
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowAll", policy =>
+    {
+        policy.AllowAnyOrigin()  // Разрешает запросы с любого домена (для разработки)
+              .AllowAnyMethod()  // Разрешает любые методы (GET, POST, PUT и т.д.)
+              .AllowAnyHeader(); // Разрешает любые заголовки
+    });
+});
+
+var app = builder.Build();
+
+app.UseSwagger();
+app.UseSwaggerUI(c =>
+{
+    c.SwaggerEndpoint("/swagger/v1/swagger.json", "Examen API V1");
+});
+
+app.UseHttpsRedirection();
+app.UseCors("AllowAll");
+app.MapControllers();
+
+app.Run();
+

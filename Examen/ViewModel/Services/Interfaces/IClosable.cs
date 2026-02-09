@@ -1,4 +1,5 @@
-﻿namespace ViewModel.Services.Interfaces
+﻿#nullable enable
+namespace ViewModel.Services.Interfaces
 {
     public interface IClosable
     {
