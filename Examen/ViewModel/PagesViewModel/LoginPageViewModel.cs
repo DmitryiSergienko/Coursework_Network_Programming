@@ -37,6 +37,26 @@ public class LoginPageViewModel : BasePageViewModel
         set { Set(ref _password, value); UpdateSignInButtonState(); }
     }
 
+    private bool _isEnabledNavigateToSignIn;
+    public bool IsEnabledNavigateToSignIn
+    {
+        get => _isEnabledNavigateToSignIn;
+        set
+        {
+            if (_isEnabledNavigateToSignIn != value)
+            {
+                _isEnabledNavigateToSignIn = value;
+                OnPropertyChanged("IsEnabledNavigateToSignIn");
+            }
+        }
+    }
+
+    private void UpdateSignInButtonState()
+    {
+        IsEnabledNavigateToSignIn = !string.IsNullOrWhiteSpace(Login) &&
+                                   !string.IsNullOrWhiteSpace(Password);
+    }
+
     private async Task OnLoginAsync()
     {
         if (string.IsNullOrWhiteSpace(Login) || string.IsNullOrWhiteSpace(Password))
@@ -68,18 +88,5 @@ public class LoginPageViewModel : BasePageViewModel
         {
             MessageBox.Show($"Ошибка: {ex.Message}");
         }
-    }
-
-    private bool _isEnabledNavigateToSignIn;
-    public bool IsEnabledNavigateToSignIn
-    {
-        get => _isEnabledNavigateToSignIn;
-        set { Set(ref _isEnabledNavigateToSignIn, value); }
-    }
-
-    private void UpdateSignInButtonState()
-    {
-        IsEnabledNavigateToSignIn = !string.IsNullOrWhiteSpace(Login) &&
-                                   !string.IsNullOrWhiteSpace(Password);
     }
 }

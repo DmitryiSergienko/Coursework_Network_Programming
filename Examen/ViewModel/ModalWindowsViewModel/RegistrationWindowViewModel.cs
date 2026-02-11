@@ -23,9 +23,60 @@ namespace ViewModel.ModalWindowsViewModel
         private string _phoneNumber = "";
         private string _humanType = "user";
 
+        public string Login
+        {
+            get => _login;
+            set { Set(ref _login, value); UpdateSendButtonState(); }
+        }
+
+        public string Password
+        {
+            get => _password;
+            set { Set(ref _password, value); UpdateSendButtonState(); }
+        }
+
+        public string Name
+        {
+            get => _name;
+            set { Set(ref _name, value); UpdateSendButtonState(); }
+        }
+
+        public string Surname
+        {
+            get => _surname;
+            set { Set(ref _surname, value); UpdateSendButtonState(); }
+        }
+
+        public string Patronymic
+        {
+            get => _patronymic;
+            set { Set(ref _patronymic, value); UpdateSendButtonState(); }
+        }
+
+        public string Mail
+        {
+            get => _mail;
+            set { Set(ref _mail, value); UpdateSendButtonState(); }
+        }
+
+        public string PhoneNumber
+        {
+            get => _phoneNumber;
+            set { Set(ref _phoneNumber, value); UpdateSendButtonState(); }
+        }
+
+        private bool _isEnabledSendFormRegistration;
+        public bool IsEnabledSendFormRegistration
+        {
+            get => _isEnabledSendFormRegistration;
+            set => Set(ref _isEnabledSendFormRegistration, value);
+        }
+
         public RegistrationWindowViewModel()
         {
-            SendFormRegistration = new RelayCommand(async _ => await OnSendForm());
+            SendFormRegistration = new AsyncRelayCommand(OnSendForm);
+            // Инициализируем начальное состояние кнопки
+            UpdateSendButtonState();
         }
 
         private async Task OnSendForm()
@@ -72,67 +123,24 @@ namespace ViewModel.ModalWindowsViewModel
             }
         }
 
-        public string Login
-        {
-            get => _login;
-            set { Set(ref _login, value); UpdateSendButtonState(); }
-        }
-
-        public string Password
-        {
-            get => _password;
-            set { Set(ref _password, value); UpdateSendButtonState(); }
-        }
-
-        public string Name
-        {
-            get => _name;
-            set { Set(ref _name, value); UpdateSendButtonState(); }
-        }
-
-        public string Surname
-        {
-            get => _surname;
-            set { Set(ref _surname, value); UpdateSendButtonState(); }
-        }
-
-        public string Patronymic
-        {
-            get => _patronymic;
-            set { Set(ref _patronymic, value); UpdateSendButtonState(); }
-        }
-
-        public string Mail
-        {
-            get => _mail;
-            set { Set(ref _mail, value); UpdateSendButtonState(); }
-        }
-
-        public string PhoneNumber
-        {
-            get => _phoneNumber;
-            set { Set(ref _phoneNumber, value); UpdateSendButtonState(); }
-        }
-
         private void UpdateSendButtonState()
         {
-            IsEnabledSendFormRegistration = !string.IsNullOrWhiteSpace(Login)
-                                        && !string.IsNullOrWhiteSpace(Password)
-                                        && !string.IsNullOrWhiteSpace(Name)
-                                        && !string.IsNullOrWhiteSpace(Surname)
-                                        && !string.IsNullOrWhiteSpace(Mail);
-        }
+            bool isValid = !string.IsNullOrWhiteSpace(Login) 
+                && !string.IsNullOrWhiteSpace(Password)
+                && !string.IsNullOrWhiteSpace(Name)
+                && !string.IsNullOrWhiteSpace(Surname)
+                && !string.IsNullOrWhiteSpace(Mail);
 
-        private bool _isEnabledSendFormRegistration;
-        public bool IsEnabledSendFormRegistration
-        {
-            get => _isEnabledSendFormRegistration;
-            set { Set(ref _isEnabledSendFormRegistration, value); }
+            // Явно устанавливаем значение
+            IsEnabledSendFormRegistration = isValid;
+
+            // Для отладки (удалить потом)
+            Console.WriteLine($"[DEBUG] Button enabled: {isValid}");
         }
 
         public void SetHumanType(string humanType)
         {
             _humanType = humanType;
-        }
+        }        
     }
 }

@@ -83,7 +83,14 @@ namespace ViewModel.PagesViewModel
         public bool EnterCountPortionsIsEnabled
         {
             get => _enterCountPortionsIsEnabled;
-            set { Set(ref _enterCountPortionsIsEnabled, value); }
+            set
+            {
+                if (_enterCountPortionsIsEnabled != value)
+                {
+                    _enterCountPortionsIsEnabled = value;
+                    OnPropertyChanged("EnterCountPortionsIsEnabled");
+                }
+            }
         }
 
         // Основной конструктор

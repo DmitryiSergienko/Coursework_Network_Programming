@@ -7,7 +7,6 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:pagesviewmodel="clr-namespace:ViewModel.PagesViewModel;assembly=ViewModel"
     Title="Панель администратора"
-    d:DataContext="{d:DesignInstance Type=pagesviewmodel:AdminPageViewModel}"
     d:DesignHeight="720"
     d:DesignWidth="1280"
     mc:Ignorable="d">

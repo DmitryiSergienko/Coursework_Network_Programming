@@ -9,7 +9,7 @@ namespace ViewModel.Services.Classes;
 public class ApiAuthService
 {
     private readonly HttpClient _httpClient;
-    private readonly string _baseUrl = "http://localhost:5191"; // ← порт из launchSettings.json
+    private readonly string _baseUrl = "http://localhost:5000";
 
     public ApiAuthService()
     {

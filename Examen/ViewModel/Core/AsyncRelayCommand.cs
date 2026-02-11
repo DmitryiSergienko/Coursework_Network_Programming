@@ -1,4 +1,6 @@
-﻿using System.Windows.Input;
+﻿// ViewModel/Core/AsyncRelayCommand.cs
+using System.Windows;
+using System.Windows.Input;
 
 namespace ViewModel.Core
 {
@@ -25,7 +27,14 @@ namespace ViewModel.Core
         {
             if (CanExecute(parameter))
             {
-                await _execute();
+                try
+                {
+                    await _execute();
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"Ошибка команды: {ex.Message}");
+                }
             }
         }
     }

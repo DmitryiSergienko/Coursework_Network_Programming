@@ -44,8 +44,8 @@ namespace ViewModel.ModalWindowsViewModel
 
         public DeleteHumanWindowViewModel()
         {
-            SearchHuman = new RelayCommand(async _ => await OnSearch());
-            DeleteHuman = new RelayCommand(async _ => await OnDelete());
+            SearchHuman = new AsyncRelayCommand(OnSearch);
+            DeleteHuman = new AsyncRelayCommand(OnDelete);
         }
 
         public void ClearData()
@@ -62,9 +62,16 @@ namespace ViewModel.ModalWindowsViewModel
             try
             {
                 var human = await _apiService.GetHumanByIdAsync(Id, HumanType);
-                _foundHuman = human;
-                RefreshHumanProperties();
-                UpdateDeleteButtonState();
+                if (human != null)
+                {
+                    _foundHuman = human;
+                    RefreshHumanProperties();
+                    UpdateDeleteButtonState();
+                }
+                else
+                {
+                    MessageBox.Show("Пользователь не найден");
+                }
             }
             catch (Exception ex)
             {
@@ -121,14 +128,28 @@ namespace ViewModel.ModalWindowsViewModel
         public bool IsEnabledIdInput
         {
             get => _isEnabledIdInput;
-            set { Set(ref _isEnabledIdInput, value); }
+            set
+            {
+                if (_isEnabledIdInput != value)
+                {
+                    _isEnabledIdInput = value;
+                    OnPropertyChanged("IsEnabledIdInput");
+                }
+            }
         }
 
         private bool _isEnabledFormDelete;
         public bool IsEnabledFormDelete
         {
             get => _isEnabledFormDelete;
-            set { Set(ref _isEnabledFormDelete, value); }
+            set
+            {
+                if (_isEnabledFormDelete != value)
+                {
+                    _isEnabledFormDelete = value;
+                    OnPropertyChanged("IsEnabledFormDelete");
+                }
+            }
         }
     }
 }

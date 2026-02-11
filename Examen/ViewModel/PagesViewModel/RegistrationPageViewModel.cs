@@ -9,7 +9,10 @@ namespace ViewModel.PagesViewModel
 {
     public class RegistrationPageViewModel : BasePageViewModel
     {
-        public RegistrationPageViewModel() { } // Для дизайнера XAML
+        public RegistrationPageViewModel() {
+            SendFormRegistration = new AsyncRelayCommand(OnSendForm);
+            UpdateSendButtonState();
+        } // Для дизайнера XAML
 
         private readonly INavigateService _navigateService;
         private readonly ApiRegistrationService _registrationService = new();
@@ -29,10 +32,11 @@ namespace ViewModel.PagesViewModel
         {
             _navigateService = navigateService;
             BackToLoginPage = new RelayCommand(_ => _navigateService.NavigateTo<LoginPageViewModel>());
-            SendFormRegistration = new RelayCommand(_ => OnSendForm());
+            SendFormRegistration = new AsyncRelayCommand(OnSendForm); // ← Без скобок!
+            UpdateSendButtonState();
         }
 
-        private async void OnSendForm()
+        private async Task OnSendForm()
         {
             if (string.IsNullOrWhiteSpace(Login) ||
                 string.IsNullOrWhiteSpace(Password) ||
@@ -120,18 +124,17 @@ namespace ViewModel.PagesViewModel
 
         private void UpdateSendButtonState()
         {
-            IsEnabledSendFormRegistration = !string.IsNullOrWhiteSpace(Login)
-                                        && !string.IsNullOrWhiteSpace(Password)
-                                        && !string.IsNullOrWhiteSpace(Name)
-                                        && !string.IsNullOrWhiteSpace(Surname)
-                                        && !string.IsNullOrWhiteSpace(Mail);
+            bool newValue = !string.IsNullOrWhiteSpace(Login)
+                        && !string.IsNullOrWhiteSpace(Password)
+                        && !string.IsNullOrWhiteSpace(Name)
+                        && !string.IsNullOrWhiteSpace(Surname)
+                        && !string.IsNullOrWhiteSpace(Mail);
+
+            _isEnabledSendFormRegistration = newValue;
+            OnPropertyChanged("IsEnabledSendFormRegistration");
         }
 
         private bool _isEnabledSendFormRegistration;
-        public bool IsEnabledSendFormRegistration
-        {
-            get => _isEnabledSendFormRegistration;
-            set { Set(ref _isEnabledSendFormRegistration, value); }
-        }
+        public bool IsEnabledSendFormRegistration => _isEnabledSendFormRegistration;
     }
 }

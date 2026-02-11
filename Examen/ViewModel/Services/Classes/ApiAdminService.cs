@@ -8,7 +8,7 @@ namespace ViewModel.Services
     public class ApiAdminService
     {
         private readonly HttpClient _httpClient = new();
-        private readonly string _baseUrl = "http://localhost:5191";
+        private readonly string _baseUrl = "http://localhost:5000";
 
         public async Task<DataTable> ExecuteSqlQueryAsync(string query)
         {

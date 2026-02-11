@@ -7,7 +7,6 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:pagesviewmodel="clr-namespace:ViewModel.PagesViewModel;assembly=ViewModel"
     Title="Регистрация"
-    d:DataContext="{d:DesignInstance Type=pagesviewmodel:RegistrationPageViewModel}"
     d:DesignHeight="720"
     d:DesignWidth="1280"
     mc:Ignorable="d">
@@ -126,13 +125,17 @@
                 Command="{Binding BackToLoginPage}"
                 Content="Back"
                 Style="{StaticResource DefaultButtonStyle}" />
+            <TextBlock
+                FontWeight="Bold"
+                Foreground="Red"
+                Text="{Binding IsEnabledSendFormRegistration}" />
             <Button
                 Grid.Row="14"
                 Grid.Column="2"
+                Background="LightGreen"
                 Command="{Binding SendFormRegistration}"
                 Content="Send"
-                IsEnabled="{Binding IsEnabledSendFormRegistration}"
-                Style="{StaticResource DefaultButtonStyle}" />
+                IsEnabled="{Binding IsEnabledSendFormRegistration}" />
         </Grid>
 
     </StackPanel>

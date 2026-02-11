@@ -3,11 +3,11 @@ using Microsoft.AspNetCore.Mvc;
 
 [ApiController]
 [Route("api/[controller]")]
-public class AdminController : ControllerBase
+public class adminController : ControllerBase
 {
     private readonly Service _service;
 
-    public AdminController(Service service)
+    public adminController(Service service)
     {
         _service = service;
     }

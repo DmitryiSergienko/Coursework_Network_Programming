@@ -6,11 +6,11 @@ using Server.Dtos;
 
 [ApiController]
 [Route("api/[controller]")]
-public class AuthController : ControllerBase
+public class authController : ControllerBase
 {
     private readonly Service _service;
 
-    public AuthController(Service service)
+    public authController(Service service)
     {
         _service = service;
     }
