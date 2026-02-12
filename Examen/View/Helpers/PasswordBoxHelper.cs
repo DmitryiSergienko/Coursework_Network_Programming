@@ -26,22 +26,17 @@ namespace View.Helpers
             dp.SetValue(PasswordProperty, value);
         }
 
-        private static bool _isUpdating;
-
         private static void OnPasswordChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         {
             if (d is PasswordBox passwordBox)
             {
                 passwordBox.PasswordChanged -= PasswordBox_PasswordChanged;
-
-                if (!_isUpdating && e.NewValue?.ToString() != passwordBox.Password)
-                {
-                    _isUpdating = true;
-                    passwordBox.Password = e.NewValue?.ToString() ?? string.Empty;
-                    _isUpdating = false;
-                }
-
+                passwordBox.Password = e.NewValue?.ToString() ?? "";
                 passwordBox.PasswordChanged += PasswordBox_PasswordChanged;
+
+                // ПРИНУДИТЕЛЬНОЕ ОБНОВЛЕНИЕ ИСТОЧНИКА
+                var expression = passwordBox.GetBindingExpression(PasswordProperty);
+                expression?.UpdateSource();
             }
         }
 
@@ -49,12 +44,11 @@ namespace View.Helpers
         {
             if (sender is PasswordBox passwordBox)
             {
-                if (!_isUpdating)
-                {
-                    _isUpdating = true;
-                    SetPassword(passwordBox, passwordBox.Password);
-                    _isUpdating = false;
-                }
+                SetPassword(passwordBox, passwordBox.Password);
+
+                // ПРИНУДИТЕЛЬНОЕ ОБНОВЛЕНИЕ ИСТОЧНИКА
+                var expression = passwordBox.GetBindingExpression(PasswordProperty);
+                expression?.UpdateSource();
             }
         }
     }

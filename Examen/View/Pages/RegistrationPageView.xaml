@@ -69,11 +69,12 @@
                 Grid.Column="0"
                 Style="{StaticResource DefaultTextBlockStyle}"
                 Text="Password:" />
-            <PasswordBox
+            <!--  ВРЕМЕННО, ПОКА НЕ ПОЧИНИМ PasswordBoxHelper  -->
+            <TextBox
                 Grid.Row="4"
                 Grid.Column="2"
-                local:PasswordBoxHelper.Password="{Binding Password, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                Style="{StaticResource DefaultPasswordBoxStyle}" />
+                Style="{StaticResource DefaultTextBoxStyle}"
+                Text="{Binding Password, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
 
             <TextBlock
                 Grid.Row="6"

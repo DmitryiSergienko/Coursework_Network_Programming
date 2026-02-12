@@ -13,7 +13,8 @@ namespace ViewModel.PagesViewModel
         public AdminPageViewModel() { } // Для дизайнера XAML
 
         private readonly ApiAdminService _apiService = new();
-        private readonly INavigateService? _navigateService;
+        private readonly INavigateService _navigateService;
+        private readonly IDialogService _dialogService; // ДОБАВЛЕНО!
 
         // Данные администратора
         public string? LoginAdmin { get; set; }
@@ -22,7 +23,7 @@ namespace ViewModel.PagesViewModel
         public string? EmailAdmin { get; set; }
         public string? PhoneAdmin { get; set; }
 
-        // Команды (обязательно инициализируем!)
+        // Команды
         public ICommand LogOut { get; private set; } = null!;
         public ICommand AddUser { get; private set; } = null!;
         public ICommand UpdateUser { get; private set; } = null!;
@@ -55,17 +56,18 @@ namespace ViewModel.PagesViewModel
             set { Set(ref _dataTableAdmin, value); }
         }
 
-        // Конструктор для DI
-        public AdminPageViewModel(INavigateService navigateService)
+        // Конструктор для DI - ДОБАВЛЕН IDialogService!
+        public AdminPageViewModel(INavigateService navigateService, IDialogService dialogService)
         {
             _navigateService = navigateService;
+            _dialogService = dialogService; // СОХРАНЯЕМ!
 
-            // Обязательная инициализация всех команд
+            // Инициализация команд
             LogOut = new RelayCommand(_ => OnLogOut());
             AddUser = new RelayCommand(_ => OnAddUser());
             UpdateUser = new RelayCommand(_ => { });
             DeleteUser = new RelayCommand(_ => OnDeleteUser());
-            AddAdmin = new RelayCommand(_ => OnAddAdmin());
+            AddAdmin = new RelayCommand(_ => OnAddAdmin()); // ИСПРАВЛЕНО!
             UpdateAdmin = new RelayCommand(_ => { });
             DeleteAdmin = new RelayCommand(_ => OnDeleteAdmin());
             AddProduct = new RelayCommand(_ => { });
@@ -80,31 +82,35 @@ namespace ViewModel.PagesViewModel
 
         private void OnLogOut()
         {
-            _navigateService?.NavigateTo<LoginPageViewModel>();
+            _navigateService.NavigateTo<LoginPageViewModel>();
         }
 
         private void OnAddUser()
         {
             var vm = new RegistrationWindowViewModel();
             vm.SetHumanType("user");
+            _dialogService.ShowModal(vm); // ПОКАЗЫВАЕМ ОКНО!
         }
 
         private void OnDeleteUser()
         {
             var vm = new DeleteHumanWindowViewModel();
             vm.HumanType = "user";
+            _dialogService.ShowModal(vm); // ПОКАЗЫВАЕМ ОКНО!
         }
 
         private void OnAddAdmin()
         {
             var vm = new RegistrationWindowViewModel();
             vm.SetHumanType("admin");
+            _dialogService.ShowModal(vm); // ПОКАЗЫВАЕМ ОКНО!
         }
 
         private void OnDeleteAdmin()
         {
             var vm = new DeleteHumanWindowViewModel();
             vm.HumanType = "admin";
+            _dialogService.ShowModal(vm); // ПОКАЗЫВАЕМ ОКНО!
         }
 
         private async void ExecuteQuery()

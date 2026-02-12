@@ -1,74 +1,96 @@
-﻿#nullable enable
-using DataLayer.Services;
+﻿using DataLayer.Services;
 using Microsoft.AspNetCore.Mvc;
 using Model;
 using Server.Dtos;
+using ViewModel.Models;
 
-[ApiController]
-[Route("api/[controller]")]
-public class authController : ControllerBase
+namespace Server.Controllers
 {
-    private readonly Service _service;
-
-    public authController(Service service)
+    [ApiController]
+    [Route("api/[controller]")]
+    public class AuthController : ControllerBase
     {
-        _service = service;
-    }
+        private readonly Service _service;
 
-    [HttpPost("login")]
-    public async Task<IActionResult> Login([FromBody] LoginRequest request)
-    {
-        if (string.IsNullOrWhiteSpace(request.Login) || string.IsNullOrWhiteSpace(request.Password))
+        public AuthController(Service service)
         {
-            return BadRequest(new { error = "Логин и пароль обязательны" });
+            _service = service;
         }
 
-        try
+        [HttpPost("login")]
+        public async Task<IActionResult> Login([FromBody] LoginRequest request)
         {
-            var user = new UsersModel(request.Login, request.Password);
-            var admin = new AdminsModel(request.Login, request.Password);
+            System.Diagnostics.Debug.WriteLine($"[SERVER] ========== НОВЫЙ ЗАПРОС ==========");
+            System.Diagnostics.Debug.WriteLine($"[SERVER] Login: {request.Login}");
+            System.Diagnostics.Debug.WriteLine($"[SERVER] Password: {request.Password}");
 
-            if (await _service.OnLoginAsync(user))
+            if (string.IsNullOrWhiteSpace(request.Login) || string.IsNullOrWhiteSpace(request.Password))
             {
-                var currentHuman = _service.CurrentHuman
-                    ?? throw new InvalidOperationException("CurrentHuman is null after successful login");
-
-                return Ok(new LoginResponse
-                {
-                    Id = currentHuman.Id,
-                    Login = currentHuman.Login,
-                    Name = currentHuman.Name ?? string.Empty,
-                    Surname = currentHuman.Surname ?? string.Empty,
-                    Type = "user"
-                });
-            }
-            else if (await _service.OnLoginAsync(admin))
-            {
-                var currentHuman = _service.CurrentHuman
-                    ?? throw new InvalidOperationException("CurrentHuman is null after successful login");
-
-                return Ok(new LoginResponse
-                {
-                    Id = currentHuman.Id,
-                    Login = currentHuman.Login,
-                    Name = currentHuman.Name ?? string.Empty,
-                    Surname = currentHuman.Surname ?? string.Empty,
-                    Type = "admin"
-                });
+                return BadRequest(new { error = "Логин и пароль обязательны" });
             }
 
-            return Unauthorized(new { error = "Неверный логин или пароль" });
-        }
-        catch (Exception ex)
-        {
-            return StatusCode(500, new { error = ex.Message });
-        }
-    }
+            try
+            {
+                // 1. СНАЧАЛА ПРОВЕРЯЕМ АДМИНА
+                System.Diagnostics.Debug.WriteLine($"[SERVER] Проверяем админа...");
+                var admin = new AdminsModel(request.Login, request.Password);
+                var isAdmin = await _service.OnLoginAsync(admin);
+                System.Diagnostics.Debug.WriteLine($"[SERVER] Результат проверки админа: {isAdmin}");
 
-    [HttpPost("logout")]
-    public IActionResult Logout()
-    {
-        _service.LogOut();
-        return Ok(new { message = "Выход выполнен" });
+                if (isAdmin)
+                {
+                    var currentHuman = _service.CurrentHuman;
+                    System.Diagnostics.Debug.WriteLine($"[SERVER] АДМИН НАЙДЕН! ID: {currentHuman?.Id}, Login: {currentHuman?.Login}");
+
+                    if (currentHuman == null)
+                    {
+                        return StatusCode(500, new { error = "CurrentHuman is null after successful login" });
+                    }
+
+                    return Ok(new LoginResponse
+                    {
+                        Id = currentHuman.Id,
+                        Login = currentHuman.Login,
+                        Name = currentHuman.Name ?? string.Empty,
+                        Surname = currentHuman.Surname ?? string.Empty,
+                        Type = "admin"
+                    });
+                }
+
+                // 2. ПОТОМ ПРОВЕРЯЕМ ЮЗЕРА
+                System.Diagnostics.Debug.WriteLine($"[SERVER] Проверяем юзера...");
+                var user = new UsersModel(request.Login, request.Password);
+                var isUser = await _service.OnLoginAsync(user);
+                System.Diagnostics.Debug.WriteLine($"[SERVER] Результат проверки юзера: {isUser}");
+
+                if (isUser)
+                {
+                    var currentHuman = _service.CurrentHuman;
+                    System.Diagnostics.Debug.WriteLine($"[SERVER] ЮЗЕР НАЙДЕН! ID: {currentHuman?.Id}, Login: {currentHuman?.Login}");
+
+                    if (currentHuman == null)
+                    {
+                        return StatusCode(500, new { error = "CurrentHuman is null after successful login" });
+                    }
+
+                    return Ok(new LoginResponse
+                    {
+                        Id = currentHuman.Id,
+                        Login = currentHuman.Login,
+                        Name = currentHuman.Name ?? string.Empty,
+                        Surname = currentHuman.Surname ?? string.Empty,
+                        Type = "user"
+                    });
+                }
+
+                System.Diagnostics.Debug.WriteLine($"[SERVER] НЕ НАЙДЕН!");
+                return Unauthorized(new { error = "Неверный логин или пароль" });
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[SERVER] ОШИБКА: {ex.Message}");
+                return StatusCode(500, new { error = ex.Message });
+            }
+        }
     }
 }

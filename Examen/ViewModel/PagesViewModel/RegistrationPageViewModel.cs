@@ -9,10 +9,10 @@ namespace ViewModel.PagesViewModel
 {
     public class RegistrationPageViewModel : BasePageViewModel
     {
-        public RegistrationPageViewModel() {
+        public RegistrationPageViewModel()
+        {
             SendFormRegistration = new AsyncRelayCommand(OnSendForm);
-            UpdateSendButtonState();
-        } // Для дизайнера XAML
+        }
 
         private readonly INavigateService _navigateService;
         private readonly ApiRegistrationService _registrationService = new();
@@ -28,21 +28,124 @@ namespace ViewModel.PagesViewModel
         private string _mail = "";
         private string _phoneNumber = "";
 
-        public RegistrationPageViewModel(INavigateService navigateService)
+        public RegistrationPageViewModel(INavigateService navigateService) : this()
         {
             _navigateService = navigateService;
             BackToLoginPage = new RelayCommand(_ => _navigateService.NavigateTo<LoginPageViewModel>());
-            SendFormRegistration = new AsyncRelayCommand(OnSendForm); // ← Без скобок!
+
+            this.PropertyChanged += (s, e) => {
+                UpdateSendButtonState();
+            };
+
             UpdateSendButtonState();
+        }
+
+        public string Login
+        {
+            get => _login;
+            set
+            {
+                _login = value;
+                OnPropertyChanged(nameof(Login));
+                UpdateSendButtonState();
+            }
+        }
+
+        public string Password
+        {
+            get => _password;
+            set
+            {
+                _password = value;
+                OnPropertyChanged(nameof(Password));
+                System.Diagnostics.Debug.WriteLine($"[REG PASSWORD] = '{value}'");
+                UpdateSendButtonState();
+            }
+        }
+
+        public string Name
+        {
+            get => _name;
+            set
+            {
+                _name = value;
+                OnPropertyChanged(nameof(Name));
+                UpdateSendButtonState();
+            }
+        }
+
+        public string Surname
+        {
+            get => _surname;
+            set
+            {
+                _surname = value;
+                OnPropertyChanged(nameof(Surname));
+                UpdateSendButtonState();
+            }
+        }
+
+        public string Patronymic
+        {
+            get => _patronymic;
+            set
+            {
+                _patronymic = value;
+                OnPropertyChanged(nameof(Patronymic));
+            }
+        }
+
+        public string Mail
+        {
+            get => _mail;
+            set
+            {
+                _mail = value;
+                OnPropertyChanged(nameof(Mail));
+                UpdateSendButtonState();
+            }
+        }
+
+        public string PhoneNumber
+        {
+            get => _phoneNumber;
+            set
+            {
+                _phoneNumber = value;
+                OnPropertyChanged(nameof(PhoneNumber));
+            }
+        }
+
+        private bool _isEnabledSendFormRegistration;
+        public bool IsEnabledSendFormRegistration
+        {
+            get => _isEnabledSendFormRegistration;
+            set
+            {
+                if (_isEnabledSendFormRegistration != value)
+                {
+                    _isEnabledSendFormRegistration = value;
+                    OnPropertyChanged(nameof(IsEnabledSendFormRegistration));
+                }
+            }
+        }
+
+        private void UpdateSendButtonState()
+        {
+            bool isValid = !string.IsNullOrWhiteSpace(Login)
+                && !string.IsNullOrWhiteSpace(Password)
+                && !string.IsNullOrWhiteSpace(Name)
+                && !string.IsNullOrWhiteSpace(Surname)
+                && !string.IsNullOrWhiteSpace(Mail);
+
+            System.Diagnostics.Debug.WriteLine($"[REG] Login='{Login}', Pwd='{Password}', Name='{Name}', Surname='{Surname}', Mail='{Mail}' -> isValid={isValid}");
+
+            IsEnabledSendFormRegistration = isValid;
         }
 
         private async Task OnSendForm()
         {
-            if (string.IsNullOrWhiteSpace(Login) ||
-                string.IsNullOrWhiteSpace(Password) ||
-                string.IsNullOrWhiteSpace(Name) ||
-                string.IsNullOrWhiteSpace(Surname) ||
-                string.IsNullOrWhiteSpace(Mail))
+            if (!IsEnabledSendFormRegistration)
             {
                 MessageBox.Show("Заполните обязательные поля.");
                 return;
@@ -57,7 +160,7 @@ namespace ViewModel.PagesViewModel
                 Patronymic = Patronymic,
                 Mail = Mail,
                 PhoneNumber = PhoneNumber,
-                HumanType = "user" // или "admin" если нужно
+                HumanType = "user"
             };
 
             try
@@ -79,62 +182,5 @@ namespace ViewModel.PagesViewModel
                 MessageBox.Show("Ошибка: " + ex.Message);
             }
         }
-
-        public string Login
-        {
-            get => _login;
-            set { Set(ref _login, value); UpdateSendButtonState(); }
-        }
-
-        public string Password
-        {
-            get => _password;
-            set { Set(ref _password, value); UpdateSendButtonState(); }
-        }
-
-        public string Name
-        {
-            get => _name;
-            set { Set(ref _name, value); UpdateSendButtonState(); }
-        }
-
-        public string Surname
-        {
-            get => _surname;
-            set { Set(ref _surname, value); UpdateSendButtonState(); }
-        }
-
-        public string Patronymic
-        {
-            get => _patronymic;
-            set { Set(ref _patronymic, value); UpdateSendButtonState(); }
-        }
-
-        public string Mail
-        {
-            get => _mail;
-            set { Set(ref _mail, value); UpdateSendButtonState(); }
-        }
-
-        public string PhoneNumber
-        {
-            get => _phoneNumber;
-            set { Set(ref _phoneNumber, value); UpdateSendButtonState(); }
-        }
-
-        private void UpdateSendButtonState()
-        {
-            bool newValue = !string.IsNullOrWhiteSpace(Login)
-                        && !string.IsNullOrWhiteSpace(Password)
-                        && !string.IsNullOrWhiteSpace(Name)
-                        && !string.IsNullOrWhiteSpace(Surname)
-                        && !string.IsNullOrWhiteSpace(Mail);
-
-            _isEnabledSendFormRegistration = newValue;
-            OnPropertyChanged("IsEnabledSendFormRegistration");
-        }
-
-        private bool _isEnabledSendFormRegistration;
-        public bool IsEnabledSendFormRegistration => _isEnabledSendFormRegistration;
     }
 }
