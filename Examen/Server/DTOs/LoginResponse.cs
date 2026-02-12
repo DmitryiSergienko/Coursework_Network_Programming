@@ -1,6 +1,4 @@
-﻿using System.Text.Json.Serialization;
-
-namespace ViewModel.Models
+﻿namespace Server.DTOs
 {
     public class LoginResponse
     {
@@ -8,8 +6,6 @@ namespace ViewModel.Models
         public string Login { get; set; } = string.Empty;
         public string Name { get; set; } = string.Empty;
         public string Surname { get; set; } = string.Empty;
-
-        [JsonPropertyName("type")]
-        public string Type { get; set; } = string.Empty;
+        public string Type { get; set; } = "user";
     }
 }

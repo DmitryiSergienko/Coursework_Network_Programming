@@ -1,8 +1,7 @@
 ﻿using DataLayer.Services;
 using Microsoft.AspNetCore.Mvc;
 using Model;
-using Server.Dtos;
-using ViewModel.Models;
+using Server.DTOs;
 
 namespace Server.Controllers
 {

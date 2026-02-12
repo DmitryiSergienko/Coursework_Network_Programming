@@ -1,6 +1,6 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using DataLayer.Services;
-using Server.Dtos;
+using Server.DTOs;
 using Model;
 
 namespace Server.Controllers

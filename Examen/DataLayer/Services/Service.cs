@@ -205,7 +205,7 @@ public class Service
 
     private async Task GetHumanInfoAsync(HumansModel human)
     {
-        if (human is AdminsModel admin)
+        if (human is AdminsModel)
         {
             var result = await Context_Procedures.Procedures.stp_search_admin_for_infoAsync(human.Login);
             var dbAdmin = result.FirstOrDefault();
@@ -213,17 +213,20 @@ public class Service
             if (dbAdmin != null)
             {
                 _currentHuman = new AdminsModel(
+                    id: dbAdmin.id,
                     login: dbAdmin.login,
                     password: dbAdmin.password,
                     name: dbAdmin.name,
                     surname: dbAdmin.surname,
                     patronymic: dbAdmin.patronymic,
                     mail: dbAdmin.mail,
-                    phone_number: dbAdmin.phone_number
+                    phone_number: dbAdmin.phone_number,
+                    registration_date: dbAdmin.registration_date,
+                    images_id: 0
                 );
             }
         }
-        else if (human is UsersModel user)
+        else if (human is UsersModel)
         {
             var result = await Context_Procedures.Procedures.stp_search_user_for_infoAsync(human.Login);
             var dbUser = result.FirstOrDefault();
@@ -231,13 +234,16 @@ public class Service
             if (dbUser != null)
             {
                 _currentHuman = new UsersModel(
+                    id: dbUser.id,
                     login: dbUser.login,
                     password: dbUser.password,
                     name: dbUser.name,
                     surname: dbUser.surname,
                     patronymic: dbUser.patronymic,
                     mail: dbUser.mail,
-                    phone_number: dbUser.phone_number
+                    phone_number: dbUser.phone_number,
+                    registration_date: dbUser.registration_date,
+                    images_id: 0
                 );
             }
         }
